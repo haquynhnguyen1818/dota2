@@ -1,0 +1,28 @@
+# -*- coding: utf-8 -*-
+"""
+Template for database_local.py.
+Copy this file to database_local.py and fill in real credentials.
+database_local.py is gitignored and must never be committed.
+"""
+
+creds = {
+       'user': 'postgres',
+       'pw': '',
+       'db': 'fpl',
+       'host': '127.0.0.1',
+       'port': '5432',
+}
+
+creds_opendota = {
+       'user': 'postgres',
+       'pw': '',
+       'db': 'dota2',
+       'host': '127.0.0.1',
+       'port': '5432',
+}
+
+creds_stratzapi = {
+       'host': 'https://stratz.com/',
+       'tier': 'default_token',
+       'api_token': '',
+}
