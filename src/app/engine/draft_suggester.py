@@ -92,6 +92,7 @@ def main() -> None:
         user=creds_opendota["user"],
         password=creds_opendota["pw"],
         dbname=creds_opendota["db"],
+        sslmode="require",
     ) as conn:
         id_by_name, name_by_id = load_heroes(conn)
         support_ids = load_support_ids(conn)

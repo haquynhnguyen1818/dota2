@@ -37,6 +37,7 @@ def main() -> None:
         user=creds_opendota["user"],
         password=creds_opendota["pw"],
         dbname=creds_opendota["db"],
+        sslmode="require",
     ) as conn:
         with conn.cursor() as cur:
             cur.execute(CREATE_ROLES_TABLE)

@@ -5,6 +5,9 @@ requires-python = ">=3.14"
 dependencies = [
     "psycopg[binary]",
     "requests",
+    "fastapi",
+    "uvicorn[standard]",
+    "streamlit",
 ]
 
 [build-system]
