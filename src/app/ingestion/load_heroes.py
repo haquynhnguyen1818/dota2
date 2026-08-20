@@ -5,7 +5,7 @@ from typing import Any
 import psycopg
 import requests
 
-from database_local import creds_opendota
+from app.config import creds_opendota
 
 OPENDOTA_BASE_URL = "https://api.opendota.com/api"
 

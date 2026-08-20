@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Template for database_local.py.
-Copy this file to database_local.py and fill in real credentials.
-database_local.py is gitignored and must never be committed.
+Template for config.py.
+Copy this file to config.py and fill in real credentials.
+config.py is gitignored and must never be committed.
 """
 
 creds = {

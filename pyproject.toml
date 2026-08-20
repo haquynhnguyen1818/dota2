@@ -1,0 +1,15 @@
+[project]
+name = "dota2"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "psycopg[binary]",
+    "requests",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

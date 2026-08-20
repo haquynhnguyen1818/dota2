@@ -1,0 +1,38 @@
+PROJECT DOTA2 HERO PICKING APP
+
+STEPS
+ 1. Periodically Pulling data from APIs then load to database. 
+ 2. Periodically process said data and load to database. 
+ 3. Create an engine to do quick calculation and produce output. 
+ 4. Expose said output via APIs. 
+ 5. Create a website to interact with said APIs. Step 1,2 and 3 are using Python.
+
+Step 1: Done.
+Step 2: Done.
+Step 3: Done.
+    Objective 1: to create ranking list of heroes in order of advantages against another hero, categorized by their roles of carry, mid or offlane. To verify, if the opponent picks a hero and I play as a carry, out of the list of all 36 carry heroes, which are the best against the opponent hero based on the ranking advantage (1st-36th).
+
+        Steps:
+        1. Calculate winrate of hero a against hero b (wr_a_b) based on stratz_hero_matchups table data of games_played and wins.
+        2. Calculate winrate of each hero based on stratz_hero_win_week table data of games_played and wins.
+        3. Get 3 lists of carry heroes, mid heroes and offlane heroes from on hero_roles_csv_import table.
+        4.1 create 3 subsets of hero and vs_hero by roles. Each subset contains 127 rows, one for each hero. For vs_hero, get from step 3, we get 3 lists of carry, mid and offlane. So the 3 subsets are 127 heroes x number of carry, 127 heroes x number of midlane, 127 heroes x number of offlane.
+        4.2 For each subsets combine with stratz_hero_matchups, get wr_a_b (from step 1), hero_wr and vs_hero_wr from stratz_hero_win_week (from step 2)
+        5. Calculate expected winrate of hero a against hero b (xWr_a_b) = [[hero_wr]]*(1-[[vs_hero_wr]])/([[hero_wr]]*(1-[[vs_hero_wr]])+(1-[[hero_wr]])*[[vs_hero_wr]])
+        6. Calculate the advantage of hero against another (advantage) = =[[wr_a_b]]-[[xWr_a_b]]
+        7. For each subset rank from advantage from best to worst.
+
+    Objective 2 - Pick phase: to produce a suggestion list of heroes to pick based on the opponents' heroes picks.
+        Rules:
+        1. Opponents can pick up to 5 heroes
+        2. With each pick we should able to suggest 3 lists of top 10 best and top 10 worst carry, midlane and offlane by advantages.
+        3. The suggestion lists base on the sum of advantage figures against opponents picks. E.g: 
+            if opponent's first pick is meepo then the potential carry hero of Troll Warlord of 1.82% advantage is accounted.
+            if then opponent's second pick is anti-mage then the potential carry hero of Troll Warlord of 4.72% advantage is accounted.
+            Then the total advantage of the potential carry Troll Warlord is 6.54% = (1.82%+4.72%).
+            We do the same for opponents' 3rd, 4th and 5th picks.
+        4. Note, the script is iteractive by user inputs. The input is opponent picks. Each pick returns 3 lists. These lists get updated by the next input.
+        5. Furthermore, we have to assign weights to advantage figures depending on the opponents picks are supports or non-supports (carry, mid, offlane). Weights are 0.8 for supports and 1.0 for non-supports. Then the total advantage of the potential carry = 0.8*advantages against supports + 1.0*advantages against non-supports.
+
+Step 4: Not Done
+Step 5: Not Done

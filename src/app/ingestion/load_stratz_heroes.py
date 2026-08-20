@@ -4,7 +4,7 @@ from typing import Any
 import psycopg
 import requests
 
-from database_local import creds_opendota, creds_stratzapi
+from app.config import creds_opendota, creds_stratzapi
 
 STRATZ_URL = "https://api.stratz.com/graphql"
 

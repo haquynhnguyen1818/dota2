@@ -1,0 +1,153 @@
+﻿hero_id,Heroes,Role
+1,Anti-Mage,Carry
+113,Arc Warden,Carry
+4,Bloodseeker,Carry
+81,Chaos Knight,Carry
+56,Clinkz,Carry
+6,Drow Ranger,Carry
+41,Faceless Void,Carry
+72,Gyrocopter,Carry
+59,Huskar,Carry
+8,Juggernaut,Carry
+54,Lifestealer,Carry
+80,Lone Druid,Carry
+48,Luna,Carry
+77,Lycan,Carry
+97,Magnus,Carry
+94,Medusa,Carry
+114,Monkey King,Carry
+10,Morphling,Carry
+138,Muerta,Carry
+89,Naga Siren,Carry
+44,Phantom Assassin,Carry
+12,Phantom Lancer,Carry
+32,Riki,Carry
+11,Shadow Fiend,Carry
+93,Slark,Carry
+35,Sniper,Carry
+67,Spectre,Carry
+18,Sven,Carry
+46,Templar Assassin,Carry
+109,Terrorblade,Carry
+19,Tiny,Carry
+95,Troll Warlord,Carry
+70,Ursa,Carry
+63,Weaver,Carry
+21,Windranger,Carry
+42,Wraith King,Carry
+73,Alchemist,Midlane
+113,Arc Warden,Midlane
+65,Batrider,Midlane
+61,Broodmother,Midlane
+56,Clinkz,Midlane
+43,Death Prophet,Midlane
+106,Ember Spirit,Midlane
+59,Huskar,Midlane
+74,Invoker,Midlane
+145,Kez,Midlane
+23,Kunkka,Midlane
+52,Leshrac,Midlane
+25,Lina,Midlane
+94,Medusa,Midlane
+82,Meepo,Midlane
+10,Morphling,Midlane
+138,Muerta,Midlane
+36,Necrophos,Midlane
+76,Outworld Destroyer,Midlane
+13,Puck,Midlane
+14,Pudge,Midlane
+45,Pugna,Midlane
+39,Queen of Pain,Midlane
+15,Razor,Midlane
+11,Shadow Fiend,Midlane
+75,Silencer,Midlane
+101,Skywrath Mage,Midlane
+128,Snapfire,Midlane
+35,Sniper,Midlane
+17,Storm Spirit,Midlane
+46,Templar Assassin,Midlane
+34,Tinker,Midlane
+19,Tiny,Midlane
+47,Viper,Midlane
+92,Visage,Midlane
+126,Void Spirit,Midlane
+21,Windranger,Midlane
+22,Zeus,Midlane
+102,Abaddon,Offlane
+2,Axe,Offlane
+65,Batrider,Offlane
+38,BeastMaster,Offlane
+4,Bloodseeker,Offlane
+62,Bounty Hunter,Offlane
+78,BrewMaster,Offlane
+99,Bristleback,Offlane
+61,Broodmother,Offlane
+96,Centaur Warrunner,Offlane
+81,Chaos Knight,Offlane
+51,Clockwerk,Offlane
+55,Dark Seer,Offlane
+135,Dawnbreaker,Offlane
+43,Death Prophet,Offlane
+69,Doom,Offlane
+49,Dragon Knight,Offlane
+107,Earth Spirit,Offlane
+7,EarthShaker,Offlane
+103,Elder Titan,Offlane
+123,Hoodwink,Offlane
+104,Legion Commander,Offlane
+77,Lycan,Offlane
+97,Magnus,Offlane
+136,Marci,Offlane
+129,Mars,Offlane
+9,Mirana,Offlane
+36,Necrophos,Offlane
+60,Night Stalker,Offlane
+120,Pangolier,Offlane
+137,Primal Beast,Offlane
+14,Pudge,Offlane
+15,Razor,Offlane
+16,Sand King,Offlane
+28,Slardar,Offlane
+29,Tidehunter,Offlane
+98,Timbersaw,Offlane
+19,Tiny,Offlane
+100,Tusk,Offlane
+108,Underlord,Offlane
+85,Undying,Offlane
+47,Viper,Offlane
+63,Weaver,Offlane
+21,Windranger,Offlane
+68,Ancient Apparition,Supports
+3,Bane,Supports
+66,Chen,Supports
+5,Crystal Maiden,Supports
+119,Dark Willow,Supports
+50,Dazzle,Supports
+87,Disruptor,Supports
+58,Enchantress,Supports
+33,Enigma,Supports
+121,Grimstroke,Supports
+91,Io,Supports
+64,Jakiro,Supports
+90,Keeper of the Light,Supports
+155,Largo,Supports
+31,Lich,Supports
+26,Lion,Supports
+53,Nature's Prophet,Supports
+88,Nyx Assassin,Supports
+84,Ogre Magi,Supports
+57,Omniknight,Supports
+111,Oracle,Supports
+110,Phoenix,Supports
+131,Ringmaster,Supports
+86,Rubick,Supports
+79,Shadow Demon,Supports
+27,Shadow Shaman,Supports
+71,Spirit Breaker,Supports
+105,Techies,Supports
+83,Treant Protector,Supports
+20,Vengeful Spirit,Supports
+40,Venomancer,Supports
+37,Warlock,Supports
+112,Winter Wyvern,Supports
+30,Witch Doctor,Supports
