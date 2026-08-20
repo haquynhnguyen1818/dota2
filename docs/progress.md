@@ -6,16 +6,46 @@ obvious from the code alone.
 
 ## Status
 
-- Step 1 (ingestion), Step 2 (processing), Step 3 (engine) — **done**.
-- Step 4 (API) and Step 5 (dashboard) — **not started**. See
-  `proj_folder_structure.md` for the planned layout (FastAPI + Streamlit,
-  src/app/api/, src/app/dashboard/).
+- Step 1 (ingestion), Step 2 (processing), Step 3 (engine), Step 4 (API),
+  Step 5 (dashboard) — **done**. Not yet deployed anywhere — both currently
+  only run locally (`uvicorn` + `streamlit run`).
 
 ## What's running
 
-Database: Heroku Postgres, credentials in `src/app/config.py` (gitignored;
-copy `config.example.py` to get started). Repo pushed to
+Database: Heroku Postgres (AWS RDS under the hood), credentials in
+`src/app/config.py` (gitignored; copy `config.example.py` to get started).
+Live connections require `sslmode="require"` — RDS rejects unencrypted
+connections; every `psycopg.connect(...)` call in `ingestion/`, `engine/`,
+and `api/db.py` sets this. Repo pushed to
 https://github.com/haquynhnguyen1818/dota2 (main).
+
+**API** (`src/app/api/`, FastAPI): `uvicorn app.api.main:app --port 8000`.
+- `GET /heroes` — all hero id/name pairs.
+- `GET /matchup-advantage/{role}/{vs_hero_id}` — Objective 1, full ranked
+  list for a role vs. one opponent, wraps `hero_matchup_advantage`.
+- `POST /draft-suggestions` — Objective 2, body `{"opponent_picks": [id,...]}`
+  (1-5 ids, no dupes). Stateless: mirrors `draft_suggester.py`'s weighted-sum
+  logic, but the caller resends the full accumulated pick list each call
+  instead of the server holding session state.
+- Interactive docs at `/docs`.
+
+**Dashboard** (`src/app/dashboard/`, Streamlit): `streamlit run
+src/app/dashboard/Home.py`. Calls the API over HTTP via `api_client.py`
+(the `proj_folder_structure.md` open question — HTTP vs. direct
+`engine`/`db` import — was decided in favor of HTTP, matching the original
+lean). Two pages:
+- `1_Matchup_Advantage.py` — role + opponent `st.selectbox` (both default
+  blank via `index=None`), full ranked table.
+- `2_Draft_Suggestions.py` — add up to 5 opponent picks one at a time via
+  `st.session_state`, per-role top-10 best/worst tables update after each.
+- Both use `st.table` (not `st.dataframe`) for result tables — `st.dataframe`
+  only supports background/font *color* from a pandas Styler, not
+  font-weight, since it renders via a canvas grid rather than HTML.
+  `st.table` renders real HTML, so `components/styling.py`'s bold+color
+  top-3-best (green) / top-3-worst (red) highlighting actually shows up.
+- No custom mobile-responsive work needed — Streamlit ≥1.32 auto-stacks
+  `st.columns()` on narrow viewports, and the app uses the default
+  "centered" (not "wide") layout.
 
 **Ingestion** (`src/app/ingestion/`):
 - `load_heroes.py` — OpenDota `/heroes`, `/heroStats`, per-hero `/matchups` → `heroes`, `hero_stats`, `hero_matchups`.
@@ -70,10 +100,25 @@ import ...` resolves from any CWD.
 
 ## Next up
 
-- Step 4: FastAPI service exposing `hero_matchup_advantage` /
-  draft-suggestion logic.
-- Step 5: Streamlit dashboard. Open decision from `proj_folder_structure.md`:
-  dashboard calls the API over HTTP (recommended) vs. importing
-  `engine`/`db` directly — not yet decided in practice.
-- No automated tests exist yet for the engine logic (formula correctness
-  has only been spot-checked manually/interactively so far).
+- **Deployment.** Nothing is hosted yet — cheapest options discussed
+  (traffic expected to be a few users, very low):
+  1. Streamlit Community Cloud (free) for the dashboard + skip hosting the
+     API separately (dashboard imports `engine`/`db` directly instead of
+     calling over HTTP) — $0 total, but reverses the HTTP-split decision
+     above.
+  2. Streamlit Community Cloud (free) + Render.com free web-service tier
+     for the API — $0, but Render's free tier sleeps after ~15 min idle
+     (~30-50s cold-start on the next request).
+  3. Small always-on VPS (Hetzner CX22 ~$4-5/mo, DigitalOcean/Linode
+     ~$5-6/mo) running both via the `docker-compose.yml` sketched in
+     `proj_folder_structure.md` — keeps the HTTP split, no cold starts,
+     small recurring cost + you own the box (updates, restarts).
+  Not yet decided which to actually use.
+- No automated tests exist yet for the engine or API logic (correctness
+  has only been spot-checked manually/interactively so far, incl. live
+  smoke tests of all 4 API endpoints against the real DB).
+- `database_local.py` (a pre-reorg leftover with a real DB password and a
+  live Stratz API JWT token) has been deleted and gitignored — if a copy
+  surfaces again (e.g. from an old branch or backup), don't recommit it,
+  and treat that Stratz token as compromised if it's ever found committed
+  anywhere in history.
