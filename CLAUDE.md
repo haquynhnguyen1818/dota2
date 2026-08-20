@@ -71,3 +71,8 @@ Calls per Second: 20
 Calls per Minute: 250
 Calls per Hour: 2000
 Calls per Day: 10000
+
+## 9. Start of session
+Read docs/progress.md first — it has current status, key implementation
+decisions, and gotchas not obvious from the code alone. docs/proj_obj.txt
+has the spec/requirements.
