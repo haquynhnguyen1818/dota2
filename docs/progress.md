@@ -6,15 +6,22 @@ obvious from the code alone.
 
 ## Status
 
-- Steps 1-4 done. Step 5 (frontend) has two implementations: the original
-  Streamlit dashboard (`src/app/dashboard/`, still present, no longer the
-  primary UI) and a static HTML/CSS/vanilla-JS frontend (`web/`) that
-  replaced it as of 2026-08-21 — see "Why the frontend changed" below.
+- **Phase 1 (steps 1-5) and Phase 2 (steps 1-4) are both done** — see
+  `proj_obj.txt` for the per-step spec and completion notes. Step 5
+  (frontend) has two implementations: the original Streamlit dashboard
+  (`src/app/dashboard/`, still present, no longer the primary UI) and a
+  static HTML/CSS/vanilla-JS frontend (`web/`) that replaced it as of
+  2026-08-21 — see "Why the frontend changed" below.
   **Fully deployed and live**: `web/` on Cloudflare
   (`https://dota2.haquynh-nguyen.workers.dev`), API + Postgres on a
   DigitalOcean Droplet behind Caddy (`https://165-22-246-179.sslip.io`).
-  Heroku Postgres has been migrated from and retired (add-on deleted) — see
-  `docs/deploy_todo.md` for the full step-by-step history.
+  Phase 2's synergy/player-history/shrinkage work (see below) was deployed
+  the same way on 2026-08-21: pushed to `origin/main`, Droplet's `api`
+  container rebuilt via `docker compose up -d --build api`, Cloudflare
+  auto-deployed `web/` on push — both verified live against the real
+  production URLs afterward. Heroku Postgres has been migrated from and
+  retired (add-on deleted) — see `docs/deploy_todo.md` for the full
+  step-by-step history.
 
 ### Why the frontend changed
 
@@ -320,21 +327,6 @@ import ...` resolves from any CWD.
 
 ## Next up
 
-- **Deployment.** Nothing is hosted yet. Direction decided (see "Why the
-  frontend changed" above): no Streamlit Community Cloud, must be
-  always-live with zero cold-start. Current plan: `web/` on a free
-  static host (Cloudflare Pages/Netlify/GitHub Pages — genuinely $0 at this
-  traffic level, no cold start) + `src/app/api/` on a small always-on VPS
-  (Hetzner CX22 ~$4-5/mo, DigitalOcean/Linode ~$5-6/mo). Exact host still
-  undecided. Remember to point `web/js/config.js`'s `API_BASE_URL` at the
-  deployed API URL before publishing the static site.
-- **`api/db.py` opens a fresh `psycopg.connect()` per request** (no pooling)
-  — measured ~3.4s for a single `POST /draft-suggestions` call against the
-  live Heroku Postgres DB. Not a bug, but worth fixing (e.g. a
-  module-level connection pool) if the always-on host makes this feel slow
-  in practice; the frontend's stale-response guard (see `web/` above) works
-  around the *symptom* (race conditions from slow requests) but doesn't
-  address the root latency.
 - No automated tests exist yet for the engine or API logic (correctness
   has only been spot-checked manually/interactively so far, incl. live
   smoke tests of all 4 API endpoints against the real DB).
@@ -343,3 +335,7 @@ import ...` resolves from any CWD.
   surfaces again (e.g. from an old branch or backup), don't recommit it,
   and treat that Stratz token as compromised if it's ever found committed
   anywhere in history.
+- King Arthas and Parma (`docs/players_id.txt`) are still marked private —
+  no `player_hero_stats` for them yet. Once the user updates that file to
+  public, re-run `load_players.py` and they'll show up in `GET /players`
+  and the web UI's player selector automatically, no code changes needed.

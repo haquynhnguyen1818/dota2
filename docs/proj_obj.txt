@@ -38,7 +38,7 @@ I. PHASE 1: COMPLETED
     Step 4: Done
     Step 5: Done
 
-II. PHASE 2: ON-GOING
+II. PHASE 2: COMPLETED
     STEPS
         1. Pulling duo heroes synergy data: combo 2 heroes with good laning phase win rates and matching winning win rates from stratz.
         under each hero's page there's a synergy tab. STRATZ uses a "TrueSynergy" metric — instead of just raw win rate together, it calculates the expected win rate from each hero's individual performance and shows the offset, so you can tell if a pairing overperforms or underperforms expectations. Good for filtering noise from small-sample combos.
@@ -54,3 +54,12 @@ II. PHASE 2: ON-GOING
 
         3. Pulling players history from opendota and stratz.
         4. Suggest hero picks based on both opponents' picks and players' history.
+
+    Step 1: Done. stratz_hero_synergy table (load_stratz_synergy.py), 16,002 rows (full 127x126 directed matrix), includes Stratz's own TrueSynergy `synergy` field.
+    Step 2: Done. draft-suggestions score = shrunk matchup advantage (vs opponent_picks) + shrunk synergy (with ally_picks), delta*n/(n+500) applied to both signals per note (a). Note (b) (lane-specific split) deliberately deferred — Stratz's laning-specific query (heroStats.laneOutcome) has no precomputed TrueSynergy-style offset, so using it would need a new ingestion table + our own log5 math; the blanket "with" synergy is used as-is for now. Built into engine (draft_suggester.py) and API (POST /draft-suggestions, ally_picks field).
+    Step 3: Done, OpenDota only. players/player_hero_stats tables (load_players.py), driven by docs/players_id.txt (public profiles only per user instruction). Stratz was tried but dropped: its per-player heroesPerformance aggregate is capped at ~10 total matches under the default API token regardless of actual match count (confirmed against 2 unrelated accounts) — not usable as a data source.
+    Step 4: Done, as annotation not a scoring signal (user decision after 3 options were presented — personal per-hero sample sizes are far noisier than the global data already being shrunk). Optional player_account_id on POST /draft-suggestions attaches games_played/wins/win_rate per suggestion via new GET /players endpoint; doesn't affect ranking.
+
+    Web UI (index.html/draft.js): ally picks (chip UI mirroring opponent picks, mutual exclusion between the two), synergy sub-rows in the expanded breakdown, and a player-history selector with per-row "You: Ng, W% WR" annotation — all built and verified via headless-browser test against the live API.
+
+    Deployed to production 2026-08-21: committed, pushed to origin/main, Droplet API rebuilt via `docker compose up -d --build api`, Cloudflare auto-deployed `web/` on push. Verified live against https://165-22-246-179.sslip.io and https://dota2.haquynh-nguyen.workers.dev.
