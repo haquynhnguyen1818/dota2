@@ -6,9 +6,14 @@ const state = {
   idByName: {},
   opponentPicks: [],
   pendingPickName: null,
+  allyPicks: [],
+  pendingAllyPickName: null,
+  players: [],
+  accountIdByName: {},
+  playerName: null,
   currentRole: "Carry",
   suggestionsByRole: null,
-  suggestionsForPicks: null, // the opponent-pick ids state.suggestionsByRole was fetched for
+  suggestionsForPicks: null, // {opponentPicks, allyPicks, playerAccountId} state.suggestionsByRole was fetched for
   expanded: {},
   showAllBest: {}, // per-role: show all 20 best vs. just the top 10
 };
@@ -72,24 +77,102 @@ async function onReset() {
   await refreshSuggestions();
 }
 
+function renderAllyChips() {
+  const el = document.getElementById("allyChips");
+  if (state.allyPicks.length === 0) {
+    el.innerHTML = '<span class="chip-empty">No ally picks yet</span>';
+    return;
+  }
+  el.innerHTML = state.allyPicks
+    .map(
+      (id) => `
+    <span class="chip">${state.nameById[id]}
+      <button aria-label="Remove ${state.nameById[id]}" data-remove-ally="${id}">×</button>
+    </span>
+  `
+    )
+    .join("");
+  el.querySelectorAll("button[data-remove-ally]").forEach((btn) => {
+    btn.addEventListener("click", () => removeAllyPick(Number(btn.dataset.removeAlly)));
+  });
+}
+
+function syncAllyPickValue() {
+  const el = document.getElementById("allyPickValue");
+  el.textContent = state.pendingAllyPickName || "Select hero…";
+  el.classList.toggle("placeholder", !state.pendingAllyPickName);
+  updateAllyAddBtnState();
+}
+
+function updateAllyAddBtnState() {
+  document.getElementById("allyAddBtn").disabled =
+    !state.pendingAllyPickName || state.allyPicks.length >= MAX_PICKS;
+}
+
+async function onAddAllyPick() {
+  if (!state.pendingAllyPickName) return;
+  const id = state.idByName[state.pendingAllyPickName];
+  if (!id) return;
+  state.allyPicks.push(id);
+  state.pendingAllyPickName = null;
+  syncAllyPickValue();
+  renderAllyChips();
+  await refreshSuggestions();
+}
+
+async function removeAllyPick(id) {
+  state.allyPicks = state.allyPicks.filter((h) => h !== id);
+  renderAllyChips();
+  syncAllyPickValue();
+  await refreshSuggestions();
+}
+
+async function onAllyReset() {
+  state.allyPicks = [];
+  state.pendingAllyPickName = null;
+  syncAllyPickValue();
+  renderAllyChips();
+  await refreshSuggestions();
+}
+
+async function onPlayerSelect(name) {
+  state.playerName = name;
+  syncPlayerValue();
+  await refreshSuggestions();
+}
+
+async function onPlayerClear() {
+  state.playerName = null;
+  syncPlayerValue();
+  await refreshSuggestions();
+}
+
+function syncPlayerValue() {
+  const el = document.getElementById("playerValue");
+  el.textContent = state.playerName || "None selected…";
+  el.classList.toggle("placeholder", !state.playerName);
+}
+
 async function refreshSuggestions() {
   state.expanded = {};
   state.showAllBest = {};
   const seq = ++requestSeq;
   const picksSnapshot = [...state.opponentPicks];
+  const alliesSnapshot = [...state.allyPicks];
+  const playerAccountId = state.playerName ? state.accountIdByName[state.playerName] : null;
   if (picksSnapshot.length === 0) {
     state.suggestionsByRole = null;
     state.suggestionsForPicks = null;
     renderLists();
     return;
   }
-  const result = await getDraftSuggestions(picksSnapshot);
+  const result = await getDraftSuggestions(picksSnapshot, alliesSnapshot, playerAccountId);
   if (seq !== requestSeq) return; // a newer request has since superseded this one
   state.suggestionsByRole = {};
   result.roles.forEach((r) => {
     state.suggestionsByRole[r.role] = { best: r.best, worst: r.worst };
   });
-  state.suggestionsForPicks = picksSnapshot;
+  state.suggestionsForPicks = { picksSnapshot, alliesSnapshot, playerAccountId };
   renderLists();
 }
 
@@ -104,12 +187,16 @@ function buildRowsHTML(list, role, kind) {
     const wrPct = item.hero_wr * 100;
     const wrClass = wrPct >= 50 ? "wr-good" : "";
     const valueText = (item.total_advantage >= 0 ? "+" : "") + (item.total_advantage * 100).toFixed(2) + "%";
+    const history = item.player_history;
+    const historyText = history
+      ? `  ·  You: ${history.games_played}g, ${(history.win_rate * 100).toFixed(1)}% WR`
+      : "";
     html += `
       <div class="row ${tier} ${sign} clickable" data-hero-id="${item.hero_id}" data-role="${role}" data-kind="${kind}" style="animation-delay:${Math.min(idx, 10) * 30}ms">
         <div class="row-rank">${String(idx + 1).padStart(2, "0")}</div>
         <div class="row-main">
           <div class="row-name" title="${item.hero_name}">${item.hero_name}</div>
-          <div class="row-wr ${wrClass}">WR ${wrPct.toFixed(2)}%</div>
+          <div class="row-wr ${wrClass}">WR ${wrPct.toFixed(2)}%${historyText}</div>
         </div>
         <div class="row-bar-track">
           <div class="row-bar ${sign}" style="width:${barPct}%;"></div>
@@ -129,6 +216,20 @@ function buildRowsHTML(list, role, kind) {
             </div>
             <div class="row-bar-track"></div>
             <div class="row-value ${bSign}">${bValueText}</div>
+          </div>
+        `;
+      });
+      item.synergy_breakdown.forEach((s) => {
+        const sSign = s.synergy >= 0 ? "pos" : "neg";
+        const sValueText = (s.synergy >= 0 ? "+" : "") + (s.synergy * 100).toFixed(2) + "%";
+        html += `
+          <div class="row sub-row ${sSign}">
+            <div class="row-rank"></div>
+            <div class="row-main">
+              <div class="row-name">↳ with ${s.with_hero_name}</div>
+            </div>
+            <div class="row-bar-track"></div>
+            <div class="row-value ${sSign}">${sValueText}</div>
           </div>
         `;
       });
@@ -206,13 +307,21 @@ function onSegClick(e) {
 }
 
 async function init() {
-  state.heroes = await getHeroes();
+  const [heroes, players] = await Promise.all([getHeroes(), getPlayers()]);
+  state.heroes = heroes;
   state.heroes.forEach((h) => {
     state.nameById[h.id] = h.name;
     state.idByName[h.name] = h.id;
   });
+  state.players = players;
+  state.players.forEach((p) => {
+    state.accountIdByName[p.name] = p.account_id;
+  });
   renderChips();
   syncHeroPickValue();
+  renderAllyChips();
+  syncAllyPickValue();
+  syncPlayerValue();
   renderLists();
 
   setupCombo({
@@ -225,7 +334,7 @@ async function init() {
     searchId: "heroPickSearch",
     options: () =>
       state.heroes
-        .filter((h) => !state.opponentPicks.includes(h.id))
+        .filter((h) => !state.opponentPicks.includes(h.id) && !state.allyPicks.includes(h.id))
         .map((h) => h.name)
         .sort((a, b) => a.localeCompare(b)),
     getValue: () => state.pendingPickName,
@@ -239,8 +348,47 @@ async function init() {
     },
   });
 
+  setupCombo({
+    comboId: "allyPickCombo",
+    triggerId: "allyPickTrigger",
+    panelId: "allyPickPanel",
+    listId: "allyPickList",
+    clearId: "allyPickClear",
+    valueId: "allyPickValue",
+    searchId: "allyPickSearch",
+    options: () =>
+      state.heroes
+        .filter((h) => !state.allyPicks.includes(h.id) && !state.opponentPicks.includes(h.id))
+        .map((h) => h.name)
+        .sort((a, b) => a.localeCompare(b)),
+    getValue: () => state.pendingAllyPickName,
+    onSelect: (v) => {
+      state.pendingAllyPickName = v;
+      syncAllyPickValue();
+    },
+    onClear: () => {
+      state.pendingAllyPickName = null;
+      syncAllyPickValue();
+    },
+  });
+
+  setupCombo({
+    comboId: "playerCombo",
+    triggerId: "playerTrigger",
+    panelId: "playerPanel",
+    listId: "playerList",
+    clearId: "playerClear",
+    valueId: "playerValue",
+    options: () => state.players.map((p) => p.name).sort((a, b) => a.localeCompare(b)),
+    getValue: () => state.playerName,
+    onSelect: onPlayerSelect,
+    onClear: onPlayerClear,
+  });
+
   document.getElementById("addBtn").addEventListener("click", onAddPick);
   document.getElementById("resetBtn").addEventListener("click", onReset);
+  document.getElementById("allyAddBtn").addEventListener("click", onAddAllyPick);
+  document.getElementById("allyResetBtn").addEventListener("click", onAllyReset);
   document.getElementById("tabs").addEventListener("click", onTabClick);
   document.querySelectorAll(".seg-btn").forEach((btn) => btn.addEventListener("click", onSegClick));
   document.getElementById("bestShowMoreBtn").addEventListener("click", () => {

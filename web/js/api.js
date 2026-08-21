@@ -18,10 +18,18 @@ function getHeroes() {
   return apiGet("/heroes");
 }
 
+function getPlayers() {
+  return apiGet("/players");
+}
+
 function getMatchupAdvantage(role, vsHeroId) {
   return apiGet(`/matchup-advantage/${encodeURIComponent(role)}/${vsHeroId}`);
 }
 
-function getDraftSuggestions(opponentPicks) {
-  return apiPost("/draft-suggestions", { opponent_picks: opponentPicks });
+function getDraftSuggestions(opponentPicks, allyPicks, playerAccountId) {
+  return apiPost("/draft-suggestions", {
+    opponent_picks: opponentPicks,
+    ally_picks: allyPicks,
+    player_account_id: playerAccountId,
+  });
 }

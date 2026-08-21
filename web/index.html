@@ -47,13 +47,55 @@
     </div>
   </div>
 
+  <!-- Ally picks -->
+  <div class="card">
+    <p class="eyebrow">Your team's picks (optional)</p>
+    <div class="chips" id="allyChips"></div>
+    <div class="add-row">
+      <div class="select-wrap">
+        <div class="combo" id="allyPickCombo">
+          <div class="combo-trigger" id="allyPickTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Select hero to add to your team">
+            <span class="combo-value placeholder" id="allyPickValue">Select hero…</span>
+            <span class="combo-icons">
+              <button class="combo-clear" id="allyPickClear" aria-label="Clear selection" type="button">×</button>
+              <span class="combo-chevron"></span>
+            </span>
+          </div>
+          <div class="combo-panel" id="allyPickPanel" role="listbox">
+            <input class="combo-search" id="allyPickSearch" type="text" placeholder="Search hero…">
+            <div class="combo-list" id="allyPickList"></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="allyAddBtn" disabled>Add pick</button>
+      <button class="btn btn-ghost" id="allyResetBtn">Reset</button>
+    </div>
+  </div>
+
+  <!-- Player history -->
+  <div class="card">
+    <p class="eyebrow">Show your history (optional)</p>
+    <div class="combo" id="playerCombo">
+      <div class="combo-trigger" id="playerTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Select a player">
+        <span class="combo-value placeholder" id="playerValue">None selected…</span>
+        <span class="combo-icons">
+          <button class="combo-clear" id="playerClear" aria-label="Clear player" type="button">×</button>
+          <span class="combo-chevron"></span>
+        </span>
+      </div>
+      <div class="combo-panel" id="playerPanel" role="listbox">
+        <div class="combo-list" id="playerList"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Role tabs -->
   <div class="tabs" id="tabs" role="tablist" aria-label="Role">
     <button class="tab active" data-role="Carry" role="tab" aria-selected="true">Carry</button>
     <button class="tab" data-role="Midlane" role="tab" aria-selected="false">Midlane</button>
     <button class="tab" data-role="Offlane" role="tab" aria-selected="false">Offlane</button>
   </div>
-  <p class="legend">Bar length shows advantage vs. field average against this opponent lineup. Click a row to see the per-opponent breakdown. WR is raw win rate.</p>
+  <p class="legend">Bar length shows advantage vs. field average against this opponent lineup, plus synergy with your team's picks. Click a row to see the per-opponent/per-ally breakdown. WR is raw win rate.</p>
 
   <!-- Mobile best/worst toggle -->
   <div class="segmented">
@@ -84,7 +126,7 @@
     </div>
   </div>
 
-  <footer>Advantage = expected win-rate delta for this hero, given the opponent's current picks.</footer>
+  <footer>Advantage = expected win-rate delta for this hero, given the opponent's picks and your team's picks. Personal history (if a player is selected) is shown for context and doesn't affect ranking.</footer>
 </div>
 
 <script src="js/config.js"></script>
