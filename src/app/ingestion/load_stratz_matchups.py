@@ -81,7 +81,7 @@ def main() -> None:
         user=creds_opendota["user"],
         password=creds_opendota["pw"],
         dbname=creds_opendota["db"],
-        sslmode="require",
+        sslmode=creds_opendota.get("sslmode", "require"),
     ) as conn:
         hero_ids = [r[0] for r in conn.execute("SELECT id FROM heroes ORDER BY id").fetchall()]
         weeks = [

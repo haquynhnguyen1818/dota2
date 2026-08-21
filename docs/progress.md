@@ -6,13 +6,15 @@ obvious from the code alone.
 
 ## Status
 
-- Step 1 (ingestion), Step 2 (processing), Step 3 (engine), Step 4 (API) —
-  **done**. Step 5 (frontend) has two implementations now: the original
+- Steps 1-4 done. Step 5 (frontend) has two implementations: the original
   Streamlit dashboard (`src/app/dashboard/`, still present, no longer the
   primary UI) and a static HTML/CSS/vanilla-JS frontend (`web/`) that
   replaced it as of 2026-08-21 — see "Why the frontend changed" below.
-  Nothing deployed yet — everything runs locally (`uvicorn` + a static file
-  server for `web/`).
+  **Fully deployed and live**: `web/` on Cloudflare
+  (`https://dota2.haquynh-nguyen.workers.dev`), API + Postgres on a
+  DigitalOcean Droplet behind Caddy (`https://165-22-246-179.sslip.io`).
+  Heroku Postgres has been migrated from and retired (add-on deleted) — see
+  `docs/deploy_todo.md` for the full step-by-step history.
 
 ### Why the frontend changed
 
@@ -34,12 +36,26 @@ call the API cross-origin.
 
 ## What's running
 
-Database: Heroku Postgres (AWS RDS under the hood), credentials in
-`src/app/config.py` (gitignored; copy `config.example.py` to get started).
-Live connections require `sslmode="require"` — RDS rejects unencrypted
-connections; every `psycopg.connect(...)` call in `ingestion/`, `engine/`,
-and `api/db.py` sets this. Repo pushed to
-https://github.com/haquynhnguyen1818/dota2 (main).
+Database: Postgres running in a container on the DigitalOcean Droplet
+(`infra/docker-compose.yml`) — Heroku Postgres (the original host) has been
+retired. Production (`api`'s own container) reaches it over the internal
+Docker network with `DB_SSLMODE=disable` (self-hosted Postgres, no SSL
+configured — that's fine, it's not internet-exposed).
+
+**Local dev**: `src/app/config.py` (gitignored; copy `config.example.py` to
+get started) now points `creds_opendota` at `127.0.0.1:5432` with
+`'sslmode': 'disable'`, reached via an SSH tunnel to the Droplet rather than
+a separate local Postgres install — reuses the real (small, low-traffic)
+production data with no separate sync step. The Droplet's Postgres is bound
+to its own loopback only (`127.0.0.1:5432:5432` in docker-compose, not
+exposed publicly), so before running anything locally — the API, or any
+`ingestion`/`engine` script — start the tunnel first:
+`ssh -i ~/.ssh/do_dota2_deploy -N -L 5432:127.0.0.1:5432 root@165.22.246.179`.
+All `psycopg.connect(...)` calls across `ingestion/`, `engine/`, and
+`api/db.py` read `sslmode` from `creds_opendota` (default `"require"` if
+unset) rather than hardcoding it, specifically so this local/tunneled setup
+and any future SSL-requiring host both work without code changes. Repo
+pushed to https://github.com/haquynhnguyen1818/dota2 (main).
 
 **API** (`src/app/api/`, FastAPI): `uvicorn app.api.main:app --port 8000`.
 - `GET /heroes` — all hero id/name pairs.

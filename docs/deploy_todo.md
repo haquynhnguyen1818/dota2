@@ -127,5 +127,11 @@ credentials/access but I can drive it once you provide them in-session.
       zero console/network errors, no CORS or mixed-content issues.
 - [ ] **[YOU]** No custom domain in use (by choice) — nothing to point DNS
       at. Revisit if a real domain gets added later.
-- [ ] **[YOU]** Decide when to fully decommission Heroku (Postgres migrated
-      and verified in Phase 2; nothing left depending on it).
+- [x] **[YOU]** Decided: retired Heroku. Add-on deleted from the Heroku
+      dashboard on 2026-08-21. Local dev's `config.py` fallback repointed at
+      the Droplet's Postgres via SSH tunnel (loopback-only port bind added
+      to `infra/docker-compose.yml`) instead of the now-gone Heroku host —
+      see `docs/progress.md`'s "What's running" for the tunnel command.
+      `ingestion`/`engine` scripts' hardcoded `sslmode="require"` also
+      switched to read from `creds_opendota` (default still `"require"`),
+      since the tunneled connection needs `"disable"` instead.
