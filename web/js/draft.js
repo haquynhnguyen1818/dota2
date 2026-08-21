@@ -1,11 +1,16 @@
+const BEST_PAGE_SIZE = 10;
+
 const state = {
   heroes: [],
   nameById: {},
+  idByName: {},
   opponentPicks: [],
+  pendingPickName: null,
   currentRole: "Carry",
   suggestionsByRole: null,
   suggestionsForPicks: null, // the opponent-pick ids state.suggestionsByRole was fetched for
   expanded: {},
+  showAllBest: {}, // per-role: show all 20 best vs. just the top 10
 };
 
 let requestSeq = 0;
@@ -30,47 +35,46 @@ function renderChips() {
   });
 }
 
-function populateSelect() {
-  const sel = document.getElementById("heroSelect");
-  const available = state.heroes
-    .filter((h) => !state.opponentPicks.includes(h.id))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  sel.innerHTML =
-    '<option value="">Select hero…</option>' + available.map((h) => `<option value="${h.id}">${h.name}</option>`).join("");
+function syncHeroPickValue() {
+  const el = document.getElementById("heroPickValue");
+  el.textContent = state.pendingPickName || "Select hero…";
+  el.classList.toggle("placeholder", !state.pendingPickName);
   updateAddBtnState();
 }
 
 function updateAddBtnState() {
-  const sel = document.getElementById("heroSelect");
-  document.getElementById("addBtn").disabled = !sel.value || state.opponentPicks.length >= MAX_PICKS;
+  document.getElementById("addBtn").disabled = !state.pendingPickName || state.opponentPicks.length >= MAX_PICKS;
 }
 
 async function onAddPick() {
-  const sel = document.getElementById("heroSelect");
-  const id = Number(sel.value);
+  if (!state.pendingPickName) return;
+  const id = state.idByName[state.pendingPickName];
   if (!id) return;
   state.opponentPicks.push(id);
+  state.pendingPickName = null;
+  syncHeroPickValue();
   renderChips();
-  populateSelect();
   await refreshSuggestions();
 }
 
 async function removePick(id) {
   state.opponentPicks = state.opponentPicks.filter((h) => h !== id);
   renderChips();
-  populateSelect();
+  syncHeroPickValue();
   await refreshSuggestions();
 }
 
 async function onReset() {
   state.opponentPicks = [];
+  state.pendingPickName = null;
+  syncHeroPickValue();
   renderChips();
-  populateSelect();
   await refreshSuggestions();
 }
 
 async function refreshSuggestions() {
   state.expanded = {};
+  state.showAllBest = {};
   const seq = ++requestSeq;
   const picksSnapshot = [...state.opponentPicks];
   if (picksSnapshot.length === 0) {
@@ -101,7 +105,7 @@ function buildRowsHTML(list, role, kind) {
     const wrClass = wrPct >= 50 ? "wr-good" : "";
     const valueText = (item.total_advantage >= 0 ? "+" : "") + (item.total_advantage * 100).toFixed(2) + "%";
     html += `
-      <div class="row ${tier} ${sign} clickable" data-hero-id="${item.hero_id}" data-role="${role}" data-kind="${kind}" style="animation-delay:${idx * 30}ms">
+      <div class="row ${tier} ${sign} clickable" data-hero-id="${item.hero_id}" data-role="${role}" data-kind="${kind}" style="animation-delay:${Math.min(idx, 10) * 30}ms">
         <div class="row-rank">${String(idx + 1).padStart(2, "0")}</div>
         <div class="row-main">
           <div class="row-name" title="${item.hero_name}">${item.hero_name}</div>
@@ -147,18 +151,34 @@ function attachRowHandlers() {
 function renderLists() {
   const bestEl = document.getElementById("bestList");
   const worstEl = document.getElementById("worstList");
+  const bestShowMoreWrap = document.getElementById("bestShowMoreWrap");
+  const bestShowMoreBtn = document.getElementById("bestShowMoreBtn");
+
   if (!state.suggestionsByRole) {
     bestEl.innerHTML = '<p class="chip-empty">Add an opponent pick to see suggestions.</p>';
     worstEl.innerHTML = "";
     document.getElementById("bestCount").textContent = "";
     document.getElementById("worstCount").textContent = "";
+    bestShowMoreWrap.style.display = "none";
     return;
   }
+
   const data = state.suggestionsByRole[state.currentRole];
-  bestEl.innerHTML = buildRowsHTML(data.best, state.currentRole, "best");
+  const showAllBest = state.showAllBest[state.currentRole] ?? false;
+  const bestVisible = showAllBest ? data.best : data.best.slice(0, BEST_PAGE_SIZE);
+
+  bestEl.innerHTML = buildRowsHTML(bestVisible, state.currentRole, "best");
   worstEl.innerHTML = buildRowsHTML(data.worst, state.currentRole, "worst");
   document.getElementById("bestCount").textContent = data.best.length + " heroes";
   document.getElementById("worstCount").textContent = data.worst.length + " heroes";
+
+  if (data.best.length > BEST_PAGE_SIZE) {
+    bestShowMoreWrap.style.display = "block";
+    bestShowMoreBtn.textContent = showAllBest ? "Show top 10 only" : `Show all ${data.best.length} heroes`;
+  } else {
+    bestShowMoreWrap.style.display = "none";
+  }
+
   attachRowHandlers();
 }
 
@@ -189,16 +209,44 @@ async function init() {
   state.heroes = await getHeroes();
   state.heroes.forEach((h) => {
     state.nameById[h.id] = h.name;
+    state.idByName[h.name] = h.id;
   });
   renderChips();
-  populateSelect();
+  syncHeroPickValue();
   renderLists();
+
+  setupCombo({
+    comboId: "heroPickCombo",
+    triggerId: "heroPickTrigger",
+    panelId: "heroPickPanel",
+    listId: "heroPickList",
+    clearId: "heroPickClear",
+    valueId: "heroPickValue",
+    searchId: "heroPickSearch",
+    options: () =>
+      state.heroes
+        .filter((h) => !state.opponentPicks.includes(h.id))
+        .map((h) => h.name)
+        .sort((a, b) => a.localeCompare(b)),
+    getValue: () => state.pendingPickName,
+    onSelect: (v) => {
+      state.pendingPickName = v;
+      syncHeroPickValue();
+    },
+    onClear: () => {
+      state.pendingPickName = null;
+      syncHeroPickValue();
+    },
+  });
 
   document.getElementById("addBtn").addEventListener("click", onAddPick);
   document.getElementById("resetBtn").addEventListener("click", onReset);
-  document.getElementById("heroSelect").addEventListener("change", updateAddBtnState);
   document.getElementById("tabs").addEventListener("click", onTabClick);
   document.querySelectorAll(".seg-btn").forEach((btn) => btn.addEventListener("click", onSegClick));
+  document.getElementById("bestShowMoreBtn").addEventListener("click", () => {
+    state.showAllBest[state.currentRole] = !(state.showAllBest[state.currentRole] ?? false);
+    renderLists();
+  });
 }
 
 init();

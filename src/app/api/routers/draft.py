@@ -22,7 +22,8 @@ router = APIRouter(prefix="/draft-suggestions", tags=["draft-suggestions"])
 
 ROLES = ["Carry", "Midlane", "Offlane"]
 MAX_PICKS = 5
-TOP_N = 10
+TOP_N_BEST = 20
+TOP_N_WORST = 10
 
 
 def _load_support_ids(conn: psycopg.Connection) -> set[int]:
@@ -66,8 +67,8 @@ def _suggestions_by_role(
         breakdown_by_id[hero_id].append((vs_hero_id, advantage))
 
     candidates = [(hero_id, total) for hero_id, total in totals.items() if hero_id not in weight_by_vs_hero]
-    best = sorted(candidates, key=lambda x: x[1], reverse=True)[:TOP_N]
-    worst = sorted(candidates, key=lambda x: x[1])[:TOP_N]
+    best = sorted(candidates, key=lambda x: x[1], reverse=True)[:TOP_N_BEST]
+    worst = sorted(candidates, key=lambda x: x[1])[:TOP_N_WORST]
     return best, worst, hero_wr_by_id, breakdown_by_id
 
 
