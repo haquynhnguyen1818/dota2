@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Draft Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d14;
+    --bg-elevated:#10141d;
+    --surface:#151a24;
+    --surface-hover:#1a2130;
+    --border:#242a3a;
+    --border-soft:#1b2130;
+    --text-primary:#edeff4;
+    --text-secondary:#8b93a7;
+    --text-tertiary:#4e5568;
+    --accent:#4c8dff;
+    --accent-soft:rgba(76,141,255,0.14);
+    --positive:#3ddb92;
+    --positive-soft:rgba(61,219,146,0.12);
+    --negative:#ff5c7a;
+    --negative-soft:rgba(255,92,122,0.12);
+    --amber:#f5b942;
+    --radius:14px;
+    --radius-sm:9px;
+    --font-display:'Space Grotesk',sans-serif;
+    --font-body:'Inter',sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(76,141,255,0.10), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, rgba(61,219,146,0.06), transparent 55%),
+      var(--bg);
+    color:var(--text-primary);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:20px 14px 60px;
+  }
+
+  .page{max-width:880px;margin:0 auto;}
+
+  /* ---------- Header ---------- */
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .live-dot{
+    width:8px;height:8px;border-radius:50%;background:var(--positive);
+    box-shadow:0 0 0 0 rgba(61,219,146,0.5);
+    animation:pulse 2.2s ease-out infinite;
+    flex-shrink:0;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(61,219,146,0.45);}
+    70%{box-shadow:0 0 0 7px rgba(61,219,146,0);}
+    100%{box-shadow:0 0 0 0 rgba(61,219,146,0);}
+  }
+  .brand h1{
+    font-family:var(--font-display);
+    font-size:24px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+    margin:0;
+  }
+  .subtitle{
+    color:var(--text-secondary);
+    font-size:14px;
+    margin:0 0 24px;
+    padding-left:18px;
+  }
+
+  /* ---------- Card shell ---------- */
+  .card{
+    background:var(--bg-elevated);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:18px;
+    margin-bottom:20px;
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--text-tertiary);
+    margin:0 0 12px;
+  }
+
+  /* ---------- Opponent picks ---------- */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;min-height:38px;}
+  .chip{
+    display:flex;align-items:center;gap:7px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:999px;
+    padding:7px 8px 7px 14px;
+    font-size:14px;
+    font-weight:500;
+    color:var(--text-primary);
+    animation:chipIn 0.25s ease;
+  }
+  @keyframes chipIn{from{opacity:0;transform:scale(0.9);}to{opacity:1;transform:scale(1);}}
+  .chip button{
+    all:unset;
+    width:20px;height:20px;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:50%;
+    color:var(--text-tertiary);
+    cursor:pointer;
+    font-size:15px;
+    line-height:1;
+  }
+  .chip button:hover{background:var(--negative-soft);color:var(--negative);}
+  .chip-empty{color:var(--text-tertiary);font-size:13px;font-style:italic;padding:8px 2px;}
+
+  .add-row{display:flex;flex-wrap:wrap;gap:8px;}
+  .select-wrap{
+    position:relative;
+    flex:1 1 200px;
+  }
+  select{
+    width:100%;
+    appearance:none;
+    -webkit-appearance:none;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius-sm);
+    color:var(--text-primary);
+    font-family:var(--font-body);
+    font-size:14px;
+    padding:11px 34px 11px 14px;
+    cursor:pointer;
+  }
+  select:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .select-wrap::after{
+    content:"";
+    position:absolute;right:14px;top:50%;
+    width:8px;height:8px;
+    border-right:1.5px solid var(--text-tertiary);
+    border-bottom:1.5px solid var(--text-tertiary);
+    transform:translateY(-70%) rotate(45deg);
+    pointer-events:none;
+  }
+  .btn{
+    font-family:var(--font-body);
+    font-size:14px;
+    font-weight:600;
+    border-radius:var(--radius-sm);
+    padding:11px 18px;
+    cursor:pointer;
+    border:1px solid transparent;
+    transition:filter 0.15s ease;
+  }
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:disabled{background:var(--surface);color:var(--text-tertiary);cursor:not-allowed;}
+  .btn-primary:not(:disabled):hover{filter:brightness(1.1);}
+  .btn-ghost{background:transparent;border-color:var(--border);color:var(--text-secondary);}
+  .btn-ghost:hover{border-color:var(--text-tertiary);color:var(--text-primary);}
+
+  /* ---------- Role tabs ---------- */
+  .tabs{
+    display:flex;gap:6px;
+    overflow-x:auto;
+    padding-bottom:4px;
+    margin-bottom:14px;
+    scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{
+    all:unset;
+    font-family:var(--font-display);
+    font-size:14px;
+    font-weight:600;
+    white-space:nowrap;
+    padding:9px 18px;
+    border-radius:999px;
+    color:var(--text-secondary);
+    border:1px solid var(--border);
+    cursor:pointer;
+    transition:all 0.15s ease;
+  }
+  .tab:hover{color:var(--text-primary);border-color:var(--text-tertiary);}
+  .tab.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+  .tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  .legend{
+    font-size:12.5px;
+    color:var(--text-tertiary);
+    margin:0 0 16px;
+    padding-left:2px;
+  }
+
+  /* ---------- Mobile segmented toggle ---------- */
+  .segmented{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:999px;
+    padding:3px;
+    margin-bottom:16px;
+  }
+  .seg-btn{
+    all:unset;
+    text-align:center;
+    font-family:var(--font-body);
+    font-size:13.5px;
+    font-weight:600;
+    padding:9px 0;
+    border-radius:999px;
+    color:var(--text-secondary);
+    cursor:pointer;
+  }
+  .seg-btn.active.pos{background:var(--positive-soft);color:var(--positive);}
+  .seg-btn.active.neg{background:var(--negative-soft);color:var(--negative);}
+
+  /* ---------- Lists grid ---------- */
+  .lists-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:16px;
+  }
+  .list-col{
+    background:var(--bg-elevated);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 14px;
+  }
+  .list-head{
+    display:flex;align-items:center;gap:8px;
+    margin-bottom:8px;
+    padding:0 4px;
+  }
+  .list-head .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .list-head .dot.pos{background:var(--positive);}
+  .list-head .dot.neg{background:var(--negative);}
+  .list-head h3{
+    font-family:var(--font-display);
+    font-size:13px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    margin:0;
+    font-weight:600;
+    color:var(--text-primary);
+  }
+  .list-head span{
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    color:var(--text-tertiary);
+    margin-left:auto;
+  }
+
+  .row{
+    display:grid;
+    grid-template-columns:24px 1fr minmax(58px,96px) 62px;
+    align-items:center;
+    gap:8px;
+    padding:9px 4px;
+    border-bottom:1px solid var(--border-soft);
+    animation:rowIn 0.35s ease backwards;
+  }
+  .row:last-child{border-bottom:none;}
+  @keyframes rowIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  .row-rank{
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--text-tertiary);
+  }
+  .row-main{min-width:0;}
+  .row-name{
+    font-size:14px;
+    font-weight:500;
+    color:var(--text-primary);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .row-wr{
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--text-secondary);
+    margin-top:1px;
+  }
+  .row.tier-signal .row-name{font-weight:700;}
+  .row.tier-signal.pos .row-name{color:var(--positive);}
+  .row.tier-signal.neg .row-name{color:var(--negative);}
+
+  .row-bar-track{
+    position:relative;
+    height:18px;
+  }
+  .row-bar-track::before{
+    content:"";
+    position:absolute;left:50%;top:0;bottom:0;width:1px;
+    background:var(--border);
+  }
+  .row-bar{
+    position:absolute;top:4px;height:10px;
+    transition:width 0.6s cubic-bezier(0.16,1,0.3,1);
+  }
+  .row-bar.pos{left:50%;background:var(--positive);border-radius:0 4px 4px 0;}
+  .row-bar.neg{right:50%;background:var(--negative);border-radius:4px 0 0 4px;}
+
+  .row-value{
+    font-family:var(--font-mono);
+    font-size:13px;
+    font-weight:600;
+    text-align:right;
+  }
+  .row-value.pos{color:var(--positive);}
+  .row-value.neg{color:var(--negative);}
+
+  footer{
+    text-align:center;
+    color:var(--text-tertiary);
+    font-size:12px;
+    margin-top:28px;
+    line-height:1.6;
+  }
+
+  /* ---------- Desktop ---------- */
+  @media (min-width:760px){
+    body{padding:40px 24px 70px;}
+    .brand h1{font-size:28px;}
+    .lists-grid{grid-template-columns:1fr 1fr;gap:20px;}
+    .segmented{display:none;}
+    .row{grid-template-columns:26px 1fr minmax(90px,140px) 72px;}
+  }
+  @media (max-width:759px){
+    .lists-grid > .list-col{display:none;}
+    .lists-grid.show-best > .list-col.best{display:block;}
+    .lists-grid.show-worst > .list-col.worst{display:block;}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:0.001ms !important;animation-iteration-count:1 !important;transition-duration:0.001ms !important;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="brand">
+    <span class="live-dot" aria-hidden="true"></span>
+    <h1>Draft Terminal</h1>
+  </div>
+  <p class="subtitle">Counter-pick intelligence for the pick phase</p>
+
+  <!-- Opponent picks -->
+  <div class="card">
+    <p class="eyebrow">Opponent picks</p>
+    <div class="chips" id="chips"></div>
+    <div class="add-row">
+      <div class="select-wrap">
+        <select id="heroSelect" aria-label="Select hero to add"></select>
+      </div>
+      <button class="btn btn-primary" id="addBtn" disabled>Add pick</button>
+      <button class="btn btn-ghost" id="resetBtn">Reset</button>
+    </div>
+  </div>
+
+  <!-- Role tabs -->
+  <div class="tabs" id="tabs" role="tablist" aria-label="Role">
+    <button class="tab active" data-role="carry" role="tab" aria-selected="true">Carry</button>
+    <button class="tab" data-role="midlane" role="tab" aria-selected="false">Midlane</button>
+  </div>
+  <p class="legend">Bar length shows advantage vs. field average against this opponent lineup. WR is raw win rate.</p>
+
+  <!-- Mobile best/worst toggle -->
+  <div class="segmented">
+    <button class="seg-btn active pos" data-view="best">Best picks</button>
+    <button class="seg-btn" data-view="worst">Worst picks</button>
+  </div>
+
+  <!-- Lists -->
+  <div class="lists-grid show-best" id="listsGrid">
+    <div class="list-col best">
+      <div class="list-head">
+        <span class="dot pos"></span>
+        <h3>Top best</h3>
+        <span id="bestCount"></span>
+      </div>
+      <div id="bestList"></div>
+    </div>
+    <div class="list-col worst">
+      <div class="list-head">
+        <span class="dot neg"></span>
+        <h3>Top worst</h3>
+        <span id="worstCount"></span>
+      </div>
+      <div id="worstList"></div>
+    </div>
+  </div>
+
+  <footer>Advantage = expected win-rate delta for this hero, given the opponent's current picks.</footer>
+</div>
+
+<script>
+  const SCALE_MAX = 11; // advantage % that maps to a full half-bar
+
+  const DATA = {
+    carry: {
+      best: [
+        { hero:"Arc Warden", wr:50.31, adv:5.45 },
+        { hero:"Templar Assassin", wr:46.03, adv:4.42 },
+        { hero:"Lycan", wr:47.82, adv:4.13 },
+        { hero:"Sven", wr:51.05, adv:3.63 },
+        { hero:"Monkey King", wr:46.09, adv:3.28 },
+        { hero:"Bloodseeker", wr:51.19, adv:2.54 },
+        { hero:"Shadow Fiend", wr:47.93, adv:2.33 },
+        { hero:"Magnus", wr:48.46, adv:2.11 },
+        { hero:"Terrorblade", wr:47.79, adv:2.05 },
+        { hero:"Anti-Mage", wr:49.86, adv:1.20 }
+      ],
+      worst: [
+        { hero:"Naga Siren", wr:50.46, adv:-10.20 },
+        { hero:"Spectre", wr:55.01, adv:-7.80 },
+        { hero:"Chaos Knight", wr:53.12, adv:-4.60 },
+        { hero:"Phantom Lancer", wr:53.53, adv:-3.95 },
+        { hero:"Wraith King", wr:55.49, adv:-3.72 },
+        { hero:"Slark", wr:50.45, adv:-3.71 },
+        { hero:"Huskar", wr:45.67, adv:-2.99 },
+        { hero:"Sniper", wr:51.68, adv:-2.97 },
+        { hero:"Juggernaut", wr:52.01, adv:-1.68 },
+        { hero:"Gyrocopter", wr:45.39, adv:-1.65 }
+      ]
+    },
+    midlane: {
+      best: [
+        { hero:"Visage", wr:50.53, adv:7.85 },
+        { hero:"Meepo", wr:50.28, adv:6.11 },
+        { hero:"Broodmother", wr:48.88, adv:6.09 },
+        { hero:"Outworld Destroyer", wr:51.78, adv:5.46 },
+        { hero:"Arc Warden", wr:50.31, adv:5.45 },
+        { hero:"Templar Assassin", wr:46.03, adv:4.42 }
+      ],
+      worst: [
+        { hero:"Alchemist", wr:48.01, adv:-4.57 },
+        { hero:"Huskar", wr:45.67, adv:-2.99 },
+        { hero:"Sniper", wr:51.68, adv:-2.97 },
+        { hero:"Zeus", wr:50.26, adv:-2.34 },
+        { hero:"Leshrac", wr:51.96, adv:-2.26 },
+        { hero:"Necrophos", wr:51.39, adv:-2.22 }
+      ]
+    }
+  };
+
+  const HERO_POOL = [
+    "Abaddon","Alchemist","Anti-Mage","Arc Warden","Axe","Bloodseeker","Broodmother",
+    "Chaos Knight","Dawnbreaker","Dragon Knight","Earthshaker","Faceless Void","Gyrocopter",
+    "Huskar","Invoker","Juggernaut","Leshrac","Lina","Lion","Lycan","Magnus","Marci",
+    "Medusa","Meepo","Monkey King","Morphling","Muerta","Naga Siren","Necrophos",
+    "Outworld Destroyer","Pangolier","Phantom Assassin","Phantom Lancer","Primal Beast",
+    "Puck","Pudge","Queen of Pain","Shadow Fiend","Slark","Sniper","Spectre",
+    "Storm Spirit","Sven","Templar Assassin","Terrorblade","Tinker","Tiny","Ursa",
+    "Viper","Visage","Void Spirit","Weaver","Windranger","Wraith King","Zeus"
+  ].sort();
+
+  const DEFAULT_PICKS = ["Abaddon","Dawnbreaker"];
+  let opponentPicks = [...DEFAULT_PICKS];
+  let currentRole = "carry";
+
+  function renderChips(){
+    const el = document.getElementById("chips");
+    if(opponentPicks.length === 0){
+      el.innerHTML = '<span class="chip-empty">No opponent picks yet</span>';
+      return;
+    }
+    el.innerHTML = opponentPicks.map(h => `
+      <span class="chip">${h}
+        <button aria-label="Remove ${h}" onclick="removePick('${h.replace(/'/g,"\\'")}')">×</button>
+      </span>
+    `).join("");
+  }
+
+  function populateSelect(){
+    const sel = document.getElementById("heroSelect");
+    const available = HERO_POOL.filter(h => !opponentPicks.includes(h));
+    sel.innerHTML = '<option value="">Select hero…</option>' +
+      available.map(h => `<option value="${h}">${h}</option>`).join("");
+    document.getElementById("addBtn").disabled = true;
+  }
+
+  function removePick(hero){
+    opponentPicks = opponentPicks.filter(h => h !== hero);
+    renderChips();
+    populateSelect();
+  }
+
+  document.getElementById("heroSelect").addEventListener("change", e => {
+    document.getElementById("addBtn").disabled = !e.target.value;
+  });
+
+  document.getElementById("addBtn").addEventListener("click", () => {
+    const sel = document.getElementById("heroSelect");
+    if(sel.value){
+      opponentPicks.push(sel.value);
+      renderChips();
+      populateSelect();
+    }
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    opponentPicks = [...DEFAULT_PICKS];
+    renderChips();
+    populateSelect();
+  });
+
+  function rowHTML(item, idx){
+    const sign = item.adv >= 0 ? "pos" : "neg";
+    const tier = idx < 3 ? "tier-signal" : "";
+    const barPct = Math.min(Math.abs(item.adv) / SCALE_MAX, 1) * 50;
+    const rank = String(idx + 1).padStart(2, "0");
+    const valueText = (item.adv >= 0 ? "+" : "") + item.adv.toFixed(2) + "%";
+    return `
+      <div class="row ${tier} ${sign}" style="animation-delay:${idx * 30}ms">
+        <div class="row-rank">${rank}</div>
+        <div class="row-main">
+          <div class="row-name" title="${item.hero}">${item.hero}</div>
+          <div class="row-wr">WR ${item.wr.toFixed(2)}%</div>
+        </div>
+        <div class="row-bar-track">
+          <div class="row-bar ${sign}" style="width:${barPct}%;"></div>
+        </div>
+        <div class="row-value ${sign}">${valueText}</div>
+      </div>
+    `;
+  }
+
+  function renderLists(){
+    const data = DATA[currentRole];
+    document.getElementById("bestList").innerHTML = data.best.map(rowHTML).join("");
+    document.getElementById("worstList").innerHTML = data.worst.map((item, idx) => rowHTML(item, idx)).join("");
+    document.getElementById("bestCount").textContent = data.best.length + " heroes";
+    document.getElementById("worstCount").textContent = data.worst.length + " heroes";
+  }
+
+  document.getElementById("tabs").addEventListener("click", e => {
+    const btn = e.target.closest(".tab");
+    if(!btn) return;
+    document.querySelectorAll(".tab").forEach(t => {
+      t.classList.remove("active");
+      t.setAttribute("aria-selected","false");
+    });
+    btn.classList.add("active");
+    btn.setAttribute("aria-selected","true");
+    currentRole = btn.dataset.role;
+    renderLists();
+  });
+
+  document.querySelectorAll(".seg-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".seg-btn").forEach(b => b.classList.remove("active","pos","neg"));
+      const view = btn.dataset.view;
+      btn.classList.add("active", view === "best" ? "pos" : "neg");
+      const grid = document.getElementById("listsGrid");
+      grid.classList.remove("show-best","show-worst");
+      grid.classList.add(view === "best" ? "show-best" : "show-worst");
+    });
+  });
+
+  renderChips();
+  populateSelect();
+  renderLists();
+</script>
+</body>
+</html>

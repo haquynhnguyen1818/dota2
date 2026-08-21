@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Matchup Advantage · Draft Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d14;
+    --bg-elevated:#10141d;
+    --surface:#151a24;
+    --border:#242a3a;
+    --border-soft:#1b2130;
+    --text-primary:#edeff4;
+    --text-secondary:#8b93a7;
+    --text-tertiary:#4e5568;
+    --accent:#4c8dff;
+    --accent-soft:rgba(76,141,255,0.14);
+    --positive:#3ddb92;
+    --positive-soft:rgba(61,219,146,0.12);
+    --negative:#ff5c7a;
+    --negative-soft:rgba(255,92,122,0.12);
+    --radius:14px;
+    --radius-sm:9px;
+    --font-display:'Space Grotesk',sans-serif;
+    --font-body:'Inter',sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(76,141,255,0.10), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, rgba(61,219,146,0.06), transparent 55%),
+      var(--bg);
+    color:var(--text-primary);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:20px 14px 60px;
+  }
+
+  .page{max-width:760px;margin:0 auto;}
+
+  /* ---------- App bar + title ---------- */
+  .app-bar{display:flex;align-items:center;gap:8px;margin-bottom:20px;}
+  .live-dot{
+    width:7px;height:7px;border-radius:50%;background:var(--positive);
+    box-shadow:0 0 0 0 rgba(61,219,146,0.5);
+    animation:pulse 2.2s ease-out infinite;
+    flex-shrink:0;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(61,219,146,0.45);}
+    70%{box-shadow:0 0 0 7px rgba(61,219,146,0);}
+    100%{box-shadow:0 0 0 0 rgba(61,219,146,0);}
+  }
+  .app-bar .name{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:12.5px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--text-secondary);
+  }
+  .page-title{
+    font-family:var(--font-display);
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+    margin:0 0 4px;
+  }
+  .page-subtitle{color:var(--text-secondary);font-size:14px;margin:0 0 22px;}
+
+  /* ---------- Card ---------- */
+  .card{
+    background:var(--bg-elevated);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:18px;
+    margin-bottom:18px;
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--text-tertiary);
+    margin:0 0 12px;
+  }
+
+  /* ---------- Selectors ---------- */
+  .selectors-grid{display:grid;grid-template-columns:1fr;gap:14px;}
+  @media (min-width:600px){.selectors-grid{grid-template-columns:1fr 1fr;}}
+
+  .combo-label{font-size:13px;color:var(--text-secondary);margin:0 0 8px;}
+  .combo{position:relative;}
+  .combo-trigger{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius-sm);
+    padding:11px 10px 11px 14px;
+    cursor:pointer;
+    min-height:44px;
+  }
+  .combo-trigger:hover{border-color:var(--text-tertiary);}
+  .combo.open .combo-trigger{border-color:var(--accent);}
+  .combo-value{font-size:14px;font-weight:500;color:var(--text-primary);}
+  .combo-value.placeholder{color:var(--text-tertiary);font-weight:400;}
+  .combo-icons{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+  .combo-clear{
+    all:unset;width:22px;height:22px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--text-tertiary);cursor:pointer;font-size:15px;line-height:1;
+  }
+  .combo-clear:hover{background:var(--negative-soft);color:var(--negative);}
+  .combo-chevron{
+    width:8px;height:8px;margin:0 6px 0 2px;
+    border-right:1.5px solid var(--text-tertiary);
+    border-bottom:1.5px solid var(--text-tertiary);
+    transform:rotate(45deg);
+    transition:transform .15s ease;
+    flex-shrink:0;
+  }
+  .combo.open .combo-chevron{transform:rotate(-135deg);}
+
+  .combo-panel{
+    position:absolute;top:calc(100% + 6px);left:0;right:0;
+    background:#131826;
+    border:1px solid var(--border);
+    border-radius:var(--radius-sm);
+    box-shadow:0 16px 40px rgba(0,0,0,0.5);
+    z-index:30;
+    max-height:280px;
+    display:flex;flex-direction:column;
+    overflow:hidden;
+    opacity:0;pointer-events:none;transform:translateY(-4px);
+    transition:opacity .15s ease, transform .15s ease;
+  }
+  .combo.open .combo-panel{opacity:1;pointer-events:auto;transform:translateY(0);}
+  .combo-search{
+    border:none;border-bottom:1px solid var(--border);
+    background:transparent;color:var(--text-primary);
+    font-family:var(--font-body);font-size:14px;
+    padding:11px 14px;outline:none;
+  }
+  .combo-search::placeholder{color:var(--text-tertiary);}
+  .combo-list{overflow-y:auto;padding:6px;}
+  .combo-option{
+    padding:9px 10px;border-radius:7px;font-size:14px;
+    color:var(--text-primary);cursor:pointer;
+  }
+  .combo-option:hover,.combo-option.active{background:var(--accent-soft);color:var(--accent);}
+  .combo-empty{padding:16px;text-align:center;color:var(--text-tertiary);font-size:13px;}
+
+  /* ---------- Context strip ---------- */
+  .context-strip{
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;
+    font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);
+    padding-top:14px;margin-top:4px;border-top:1px solid var(--border-soft);
+  }
+  .context-strip b{color:var(--text-primary);font-weight:600;}
+  .context-strip .sep{color:var(--border);}
+
+  /* ---------- List ---------- */
+  .list-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:0 4px;}
+  .list-head h3{
+    font-family:var(--font-display);font-size:13px;letter-spacing:0.06em;
+    text-transform:uppercase;margin:0;font-weight:600;color:var(--text-primary);
+  }
+  .list-head span{font-family:var(--font-mono);font-size:11.5px;color:var(--text-tertiary);margin-left:auto;}
+
+  .row{
+    display:grid;
+    grid-template-columns:24px 1fr minmax(58px,96px) 62px;
+    align-items:center;gap:8px;
+    padding:9px 4px;
+    border-bottom:1px solid var(--border-soft);
+    animation:rowIn 0.35s ease backwards;
+  }
+  .row:last-child{border-bottom:none;}
+  @keyframes rowIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  .row-rank{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);}
+  .row-main{min-width:0;}
+  .row-name{font-size:14px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row-wr{font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);margin-top:1px;}
+  .row.tier-signal .row-name{font-weight:700;}
+  .row.tier-signal.pos .row-name{color:var(--positive);}
+  .row.tier-signal.neg .row-name{color:var(--negative);}
+
+  .row-bar-track{position:relative;height:18px;}
+  .row-bar-track::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border);}
+  .row-bar{position:absolute;top:4px;height:10px;transition:width 0.6s cubic-bezier(0.16,1,0.3,1);}
+  .row-bar.pos{left:50%;background:var(--positive);border-radius:0 4px 4px 0;}
+  .row-bar.neg{right:50%;background:var(--negative);border-radius:4px 0 0 4px;}
+
+  .row-value{font-family:var(--font-mono);font-size:13px;font-weight:600;text-align:right;}
+  .row-value.pos{color:var(--positive);}
+  .row-value.neg{color:var(--negative);}
+
+  @media (min-width:600px){
+    .row{grid-template-columns:26px 1fr minmax(90px,140px) 72px;}
+  }
+
+  /* ---------- Show more ---------- */
+  .show-more-wrap{text-align:center;margin-top:12px;}
+  .btn-ghost{
+    all:unset;font-family:var(--font-body);font-size:13.5px;font-weight:600;
+    color:var(--text-secondary);border:1px solid var(--border);
+    border-radius:999px;padding:9px 20px;cursor:pointer;
+  }
+  .btn-ghost:hover{border-color:var(--text-tertiary);color:var(--text-primary);}
+
+  /* ---------- Empty state ---------- */
+  .empty-state{padding:44px 20px;text-align:center;}
+  .empty-state .icon{
+    width:40px;height:40px;border-radius:50%;
+    background:var(--surface);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    margin:0 auto 14px;color:var(--text-tertiary);font-size:16px;
+  }
+  .empty-state p{color:var(--text-secondary);font-size:14.5px;margin:0;font-weight:500;}
+  .empty-state .sub{color:var(--text-tertiary);font-size:12.5px;margin-top:5px;}
+
+  footer{text-align:center;color:var(--text-tertiary);font-size:12px;margin-top:24px;line-height:1.6;}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:0.001ms !important;animation-iteration-count:1 !important;transition-duration:0.001ms !important;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="app-bar">
+    <span class="live-dot" aria-hidden="true"></span>
+    <span class="name">Draft Terminal</span>
+  </div>
+  <h1 class="page-title">Matchup Advantage</h1>
+  <p class="page-subtitle">Full hero-by-hero edge for a single matchup</p>
+
+  <!-- Selectors -->
+  <div class="card">
+    <div class="selectors-grid">
+      <div>
+        <p class="combo-label">Your role</p>
+        <div class="combo" id="roleCombo">
+          <div class="combo-trigger" id="roleTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="combo-value" id="roleValue">Carry</span>
+            <span class="combo-icons">
+              <button class="combo-clear" id="roleClear" aria-label="Clear role" type="button">×</button>
+              <span class="combo-chevron"></span>
+            </span>
+          </div>
+          <div class="combo-panel" id="rolePanel" role="listbox">
+            <div class="combo-list" id="roleList"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="combo-label">Opponent hero</p>
+        <div class="combo" id="heroCombo">
+          <div class="combo-trigger" id="heroTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="combo-value" id="heroValue">Anti-Mage</span>
+            <span class="combo-icons">
+              <button class="combo-clear" id="heroClear" aria-label="Clear hero" type="button">×</button>
+              <span class="combo-chevron"></span>
+            </span>
+          </div>
+          <div class="combo-panel" id="heroPanel" role="listbox">
+            <input class="combo-search" id="heroSearch" type="text" placeholder="Search hero…">
+            <div class="combo-list" id="heroList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="context-strip" id="contextStrip"></div>
+  </div>
+
+  <!-- Ranked list -->
+  <div class="card" id="listCard">
+    <div class="list-head">
+      <h3 id="listTitle">Ranked counters</h3>
+      <span id="listCount"></span>
+    </div>
+    <div id="listBody"></div>
+    <div class="show-more-wrap" id="showMoreWrap" style="display:none;">
+      <button class="btn-ghost" id="showMoreBtn"></button>
+    </div>
+  </div>
+
+  <footer>Advantage = expected win-rate delta for this hero in this role, given the selected opponent.</footer>
+</div>
+
+<script>
+  const SCALE_MAX = 7;
+  const PAGE_SIZE = 10;
+
+  const ROLE_OPTIONS = ["Carry","Midlane","Offlane","Soft Support","Hard Support"];
+
+  const HERO_POOL = [
+    "Abaddon","Alchemist","Anti-Mage","Arc Warden","Axe","Bloodseeker","Broodmother",
+    "Chaos Knight","Clinkz","Dawnbreaker","Dragon Knight","Drow Ranger","Earthshaker",
+    "Faceless Void","Gyrocopter","Huskar","Invoker","Juggernaut","Leshrac","Lifestealer",
+    "Lina","Lion","Lone Druid","Luna","Lycan","Magnus","Marci","Medusa","Meepo",
+    "Monkey King","Morphling","Muerta","Naga Siren","Necrophos","Outworld Destroyer",
+    "Pangolier","Phantom Assassin","Phantom Lancer","Primal Beast","Puck","Pudge",
+    "Queen of Pain","Riki","Shadow Fiend","Slark","Sniper","Spectre","Storm Spirit",
+    "Sven","Templar Assassin","Terrorblade","Tiny","Troll Warlord","Ursa","Viper",
+    "Visage","Void Spirit","Weaver","Windranger","Wraith King","Zeus"
+  ].sort();
+
+  // key = "Role|Opponent"
+  const MATCHUPS = {
+    "Carry|Anti-Mage": {
+      baseline: 49.86,
+      heroes: [
+        { hero:"Bloodseeker", adv:5.87, wr:51.19 },
+        { hero:"Huskar", adv:5.74, wr:45.67 },
+        { hero:"Lone Druid", adv:5.42, wr:46.61 },
+        { hero:"Troll Warlord", adv:4.35, wr:52.68 },
+        { hero:"Shadow Fiend", adv:3.51, wr:47.93 },
+        { hero:"Luna", adv:3.43, wr:50.64 },
+        { hero:"Monkey King", adv:3.39, wr:46.09 },
+        { hero:"Arc Warden", adv:3.37, wr:50.31 },
+        { hero:"Ursa", adv:3.28, wr:47.71 },
+        { hero:"Templar Assassin", adv:3.24, wr:46.03 },
+        { hero:"Magnus", adv:3.18, wr:48.46 },
+        { hero:"Riki", adv:2.72, wr:52.02 },
+        { hero:"Sven", adv:2.50, wr:51.05 },
+        { hero:"Phantom Assassin", adv:2.33, wr:52.83 },
+        { hero:"Tiny", adv:2.11, wr:44.52 },
+        { hero:"Terrorblade", adv:1.45, wr:47.79 },
+        { hero:"Clinkz", adv:1.35, wr:49.79 },
+        { hero:"Drow Ranger", adv:1.01, wr:48.19 },
+        { hero:"Lycan", adv:0.77, wr:47.82 },
+        { hero:"Gyrocopter", adv:0.39, wr:45.39 },
+        { hero:"Windranger", adv:0.30, wr:48.57 },
+        { hero:"Slark", adv:0.09, wr:50.45 },
+        { hero:"Sniper", adv:-0.57, wr:51.68 },
+        { hero:"Lifestealer", adv:-0.80, wr:52.52 },
+        { hero:"Juggernaut", adv:-0.83, wr:52.01 },
+        { hero:"Weaver", adv:-0.94, wr:48.57 },
+        { hero:"Faceless Void", adv:-1.20, wr:50.08 },
+        { hero:"Muerta", adv:-1.59, wr:49.41 },
+        { hero:"Spectre", adv:-1.85, wr:55.01 },
+        { hero:"Naga Siren", adv:-2.89, wr:50.46 }
+      ]
+    }
+  };
+
+  let state = { role:"Carry", hero:"Anti-Mage", showAll:false };
+
+  /* ---------------- Combobox ---------------- */
+  function setupCombo({comboId, triggerId, panelId, listId, clearId, valueId, searchId, options, getValue, onSelect, onClear}){
+    const combo = document.getElementById(comboId);
+    const trigger = document.getElementById(triggerId);
+    const panel = document.getElementById(panelId);
+    const list = document.getElementById(listId);
+    const clearBtn = document.getElementById(clearId);
+    const valueEl = document.getElementById(valueId);
+    const searchEl = searchId ? document.getElementById(searchId) : null;
+
+    function renderOptions(filter){
+      const q = (filter || "").toLowerCase();
+      const filtered = options.filter(o => o.toLowerCase().includes(q));
+      if(filtered.length === 0){
+        list.innerHTML = '<div class="combo-empty">No matches</div>';
+        return;
+      }
+      list.innerHTML = filtered.map(o => {
+        const active = o === getValue() ? "active" : "";
+        return `<div class="combo-option ${active}" role="option" data-value="${o}">${o}</div>`;
+      }).join("");
+    }
+
+    function open(){
+      combo.classList.add("open");
+      trigger.setAttribute("aria-expanded","true");
+      renderOptions(searchEl ? searchEl.value : "");
+      if(searchEl){ searchEl.value=""; setTimeout(()=>searchEl.focus(),10); }
+    }
+    function close(){
+      combo.classList.remove("open");
+      trigger.setAttribute("aria-expanded","false");
+    }
+    function toggle(){ combo.classList.contains("open") ? close() : open(); }
+
+    trigger.addEventListener("click", toggle);
+    trigger.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); }});
+
+    list.addEventListener("click", e => {
+      const opt = e.target.closest(".combo-option");
+      if(!opt) return;
+      onSelect(opt.dataset.value);
+      close();
+    });
+
+    if(searchEl){
+      searchEl.addEventListener("input", () => renderOptions(searchEl.value));
+      searchEl.addEventListener("click", e => e.stopPropagation());
+    }
+
+    clearBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      onClear();
+      close();
+    });
+
+    document.addEventListener("click", e => {
+      if(!combo.contains(e.target)) close();
+    });
+    document.addEventListener("keydown", e => { if(e.key === "Escape") close(); });
+
+    return { close };
+  }
+
+  setupCombo({
+    comboId:"roleCombo", triggerId:"roleTrigger", panelId:"rolePanel", listId:"roleList",
+    clearId:"roleClear", valueId:"roleValue",
+    options: ROLE_OPTIONS,
+    getValue: () => state.role,
+    onSelect: v => { state.role = v; state.showAll=false; syncValues(); render(); },
+    onClear: () => { state.role = null; syncValues(); render(); }
+  });
+
+  setupCombo({
+    comboId:"heroCombo", triggerId:"heroTrigger", panelId:"heroPanel", listId:"heroList",
+    clearId:"heroClear", valueId:"heroValue", searchId:"heroSearch",
+    options: HERO_POOL,
+    getValue: () => state.hero,
+    onSelect: v => { state.hero = v; state.showAll=false; syncValues(); render(); },
+    onClear: () => { state.hero = null; syncValues(); render(); }
+  });
+
+  function syncValues(){
+    const rv = document.getElementById("roleValue");
+    rv.textContent = state.role || "Select role…";
+    rv.classList.toggle("placeholder", !state.role);
+    const hv = document.getElementById("heroValue");
+    hv.textContent = state.hero || "Select hero…";
+    hv.classList.toggle("placeholder", !state.hero);
+  }
+
+  /* ---------------- Rendering ---------------- */
+  function rowHTML(item, idx, total){
+    const sign = item.adv >= 0 ? "pos" : "neg";
+    let tier = "";
+    if(idx < 3 && item.adv > 0) tier = "tier-signal";
+    if(idx >= total - 3 && item.adv < 0) tier = "tier-signal";
+    const barPct = Math.min(Math.abs(item.adv) / SCALE_MAX, 1) * 50;
+    const rank = String(idx + 1).padStart(2, "0");
+    const valueText = (item.adv >= 0 ? "+" : "") + item.adv.toFixed(2) + "%";
+    return `
+      <div class="row ${tier} ${sign}" style="animation-delay:${Math.min(idx,10) * 30}ms">
+        <div class="row-rank">${rank}</div>
+        <div class="row-main">
+          <div class="row-name" title="${item.hero}">${item.hero}</div>
+          <div class="row-wr">WR ${item.wr.toFixed(2)}%</div>
+        </div>
+        <div class="row-bar-track">
+          <div class="row-bar ${sign}" style="width:${barPct}%;"></div>
+        </div>
+        <div class="row-value ${sign}">${valueText}</div>
+      </div>
+    `;
+  }
+
+  function render(){
+    const strip = document.getElementById("contextStrip");
+    const listBody = document.getElementById("listBody");
+    const showMoreWrap = document.getElementById("showMoreWrap");
+    const showMoreBtn = document.getElementById("showMoreBtn");
+    const listCount = document.getElementById("listCount");
+    const listTitle = document.getElementById("listTitle");
+
+    if(!state.role || !state.hero){
+      strip.innerHTML = "";
+      listTitle.textContent = "Ranked counters";
+      listCount.textContent = "";
+      showMoreWrap.style.display = "none";
+      listBody.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">?</div>
+          <p>Choose a role and opponent hero</p>
+          <div class="sub">Ranked counters will show up here once both are set.</div>
+        </div>`;
+      return;
+    }
+
+    const key = state.role + "|" + state.hero;
+    const data = MATCHUPS[key];
+
+    if(!data){
+      strip.innerHTML = `<span>Role <b>${state.role}</b></span><span class="sep">·</span><span>Opponent <b>${state.hero}</b></span>`;
+      listTitle.textContent = "Ranked counters";
+      listCount.textContent = "";
+      showMoreWrap.style.display = "none";
+      listBody.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">—</div>
+          <p>No matchup data yet</p>
+          <div class="sub">This role/opponent combination hasn't been analyzed.</div>
+        </div>`;
+      return;
+    }
+
+    strip.innerHTML = `
+      <span>Role <b>${state.role}</b></span>
+      <span class="sep">·</span>
+      <span>Opponent <b>${state.hero}</b></span>
+      <span class="sep">·</span>
+      <span>Baseline WR <b>${data.baseline.toFixed(2)}%</b></span>
+    `;
+
+    listTitle.textContent = "Ranked counters";
+    listCount.textContent = data.heroes.length + " heroes";
+
+    const total = data.heroes.length;
+    const visible = state.showAll ? data.heroes : data.heroes.slice(0, PAGE_SIZE);
+    listBody.innerHTML = visible.map((item, idx) => rowHTML(item, idx, total)).join("");
+
+    if(total > PAGE_SIZE){
+      showMoreWrap.style.display = "block";
+      showMoreBtn.textContent = state.showAll
+        ? "Show top 10 only"
+        : `Show all ${total} heroes`;
+    } else {
+      showMoreWrap.style.display = "none";
+    }
+  }
+
+  document.getElementById("showMoreBtn").addEventListener("click", () => {
+    state.showAll = !state.showAll;
+    render();
+  });
+
+  syncValues();
+  render();
+</script>
+</body>
+</html>

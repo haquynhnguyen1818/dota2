@@ -10,7 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException
 import psycopg
 
 from app.api.db import get_conn
-from app.api.schemas.draft import DraftRequest, DraftResponse, DraftRoleSuggestions, DraftSuggestion
+from app.api.schemas.draft import (
+    DraftAdvantageBreakdown,
+    DraftRequest,
+    DraftResponse,
+    DraftRoleSuggestions,
+    DraftSuggestion,
+)
 
 router = APIRouter(prefix="/draft-suggestions", tags=["draft-suggestions"])
 
@@ -40,10 +46,10 @@ def _suggestions_by_role(
     conn: psycopg.Connection,
     role: str,
     weight_by_vs_hero: dict[int, float],
-) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+) -> tuple[list[tuple[int, float]], list[tuple[int, float]], dict[int, float], dict[int, list[tuple[int, float]]]]:
     rows = conn.execute(
         """
-        SELECT hero_id, vs_hero_id, advantage
+        SELECT hero_id, vs_hero_id, advantage, hero_wr
         FROM hero_matchup_advantage
         WHERE role_name = %s AND vs_hero_id = ANY(%s)
         """,
@@ -51,13 +57,37 @@ def _suggestions_by_role(
     ).fetchall()
 
     totals: dict[int, float] = defaultdict(float)
-    for hero_id, vs_hero_id, advantage in rows:
-        totals[hero_id] += float(advantage) * weight_by_vs_hero[vs_hero_id]
+    hero_wr_by_id: dict[int, float] = {}
+    breakdown_by_id: dict[int, list[tuple[int, float]]] = defaultdict(list)
+    for hero_id, vs_hero_id, advantage, hero_wr in rows:
+        advantage = float(advantage)
+        totals[hero_id] += advantage * weight_by_vs_hero[vs_hero_id]
+        hero_wr_by_id[hero_id] = float(hero_wr)
+        breakdown_by_id[hero_id].append((vs_hero_id, advantage))
 
     candidates = [(hero_id, total) for hero_id, total in totals.items() if hero_id not in weight_by_vs_hero]
     best = sorted(candidates, key=lambda x: x[1], reverse=True)[:TOP_N]
     worst = sorted(candidates, key=lambda x: x[1])[:TOP_N]
-    return best, worst
+    return best, worst, hero_wr_by_id, breakdown_by_id
+
+
+def _build_suggestion(
+    hero_id: int,
+    total_advantage: float,
+    hero_wr_by_id: dict[int, float],
+    breakdown_by_id: dict[int, list[tuple[int, float]]],
+    name_by_id: dict[int, str],
+) -> DraftSuggestion:
+    return DraftSuggestion(
+        hero_id=hero_id,
+        hero_name=name_by_id[hero_id],
+        hero_wr=hero_wr_by_id[hero_id],
+        total_advantage=total_advantage,
+        breakdown=[
+            DraftAdvantageBreakdown(vs_hero_id=vs_id, vs_hero_name=name_by_id[vs_id], advantage=advantage)
+            for vs_id, advantage in sorted(breakdown_by_id[hero_id], key=lambda x: x[1], reverse=True)
+        ],
+    )
 
 
 @router.post("", response_model=DraftResponse)
@@ -79,12 +109,12 @@ def get_draft_suggestions(request: DraftRequest, conn: psycopg.Connection = Depe
 
     roles = []
     for role in ROLES:
-        best, worst = _suggestions_by_role(conn, role, weight_by_vs_hero)
+        best, worst, hero_wr_by_id, breakdown_by_id = _suggestions_by_role(conn, role, weight_by_vs_hero)
         roles.append(
             DraftRoleSuggestions(
                 role=role,
-                best=[DraftSuggestion(hero_id=h, hero_name=name_by_id[h], total_advantage=t) for h, t in best],
-                worst=[DraftSuggestion(hero_id=h, hero_name=name_by_id[h], total_advantage=t) for h, t in worst],
+                best=[_build_suggestion(h, t, hero_wr_by_id, breakdown_by_id, name_by_id) for h, t in best],
+                worst=[_build_suggestion(h, t, hero_wr_by_id, breakdown_by_id, name_by_id) for h, t in worst],
             )
         )
 

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Draft Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="page">
+
+  <div class="brand">
+    <span class="live-dot" aria-hidden="true"></span>
+    <h1>Draft Terminal</h1>
+  </div>
+  <p class="subtitle">Counter-pick intelligence for the pick phase</p>
+  <nav class="nav">
+    <a href="index.html" class="active">Draft Suggestions</a>
+    <a href="matchup.html">Matchup Advantage</a>
+  </nav>
+
+  <!-- Opponent picks -->
+  <div class="card">
+    <p class="eyebrow">Opponent picks</p>
+    <div class="chips" id="chips"></div>
+    <div class="add-row">
+      <div class="select-wrap">
+        <select id="heroSelect" aria-label="Select hero to add"></select>
+      </div>
+      <button class="btn btn-primary" id="addBtn" disabled>Add pick</button>
+      <button class="btn btn-ghost" id="resetBtn">Reset</button>
+    </div>
+  </div>
+
+  <!-- Role tabs -->
+  <div class="tabs" id="tabs" role="tablist" aria-label="Role">
+    <button class="tab active" data-role="Carry" role="tab" aria-selected="true">Carry</button>
+    <button class="tab" data-role="Midlane" role="tab" aria-selected="false">Midlane</button>
+    <button class="tab" data-role="Offlane" role="tab" aria-selected="false">Offlane</button>
+  </div>
+  <p class="legend">Bar length shows advantage vs. field average against this opponent lineup. Click a row to see the per-opponent breakdown. WR is raw win rate.</p>
+
+  <!-- Mobile best/worst toggle -->
+  <div class="segmented">
+    <button class="seg-btn active pos" data-view="best">Best picks</button>
+    <button class="seg-btn" data-view="worst">Worst picks</button>
+  </div>
+
+  <!-- Lists -->
+  <div class="lists-grid show-best" id="listsGrid">
+    <div class="list-col best">
+      <div class="list-head">
+        <span class="dot pos"></span>
+        <h3>Top best</h3>
+        <span id="bestCount"></span>
+      </div>
+      <div id="bestList"></div>
+    </div>
+    <div class="list-col worst">
+      <div class="list-head">
+        <span class="dot neg"></span>
+        <h3>Top worst</h3>
+        <span id="worstCount"></span>
+      </div>
+      <div id="worstList"></div>
+    </div>
+  </div>
+
+  <footer>Advantage = expected win-rate delta for this hero, given the opponent's current picks.</footer>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/draft.js"></script>
+</body>
+</html>

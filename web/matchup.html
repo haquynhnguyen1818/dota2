@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Matchup Advantage · Draft Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="page narrow">
+
+  <div class="app-bar">
+    <span class="live-dot" aria-hidden="true"></span>
+    <span class="name">Draft Terminal</span>
+  </div>
+  <h1 class="page-title">Matchup Advantage</h1>
+  <p class="page-subtitle">Full hero-by-hero edge for a single matchup</p>
+  <nav class="nav">
+    <a href="index.html">Draft Suggestions</a>
+    <a href="matchup.html" class="active">Matchup Advantage</a>
+  </nav>
+
+  <!-- Selectors -->
+  <div class="card">
+    <div class="selectors-grid">
+      <div>
+        <p class="combo-label">Your role</p>
+        <div class="combo" id="roleCombo">
+          <div class="combo-trigger" id="roleTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="combo-value" id="roleValue">Carry</span>
+            <span class="combo-icons">
+              <button class="combo-clear" id="roleClear" aria-label="Clear role" type="button">×</button>
+              <span class="combo-chevron"></span>
+            </span>
+          </div>
+          <div class="combo-panel" id="rolePanel" role="listbox">
+            <div class="combo-list" id="roleList"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="combo-label">Opponent hero</p>
+        <div class="combo" id="heroCombo">
+          <div class="combo-trigger" id="heroTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="combo-value" id="heroValue">Anti-Mage</span>
+            <span class="combo-icons">
+              <button class="combo-clear" id="heroClear" aria-label="Clear hero" type="button">×</button>
+              <span class="combo-chevron"></span>
+            </span>
+          </div>
+          <div class="combo-panel" id="heroPanel" role="listbox">
+            <input class="combo-search" id="heroSearch" type="text" placeholder="Search hero…">
+            <div class="combo-list" id="heroList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="context-strip" id="contextStrip"></div>
+  </div>
+
+  <!-- Ranked list -->
+  <div class="card" id="listCard">
+    <div class="list-head">
+      <h3 id="listTitle">Ranked counters</h3>
+      <span id="listCount"></span>
+    </div>
+    <div id="listBody"></div>
+    <div class="show-more-wrap" id="showMoreWrap" style="display:none;">
+      <button class="btn-showmore" id="showMoreBtn"></button>
+    </div>
+  </div>
+
+  <footer>Advantage = expected win-rate delta for this hero in this role, given the selected opponent.</footer>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/matchup.js"></script>
+</body>
+</html>
