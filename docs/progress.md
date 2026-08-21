@@ -61,10 +61,25 @@ pushed to https://github.com/haquynhnguyen1818/dota2 (main).
 - `GET /heroes` — all hero id/name pairs.
 - `GET /matchup-advantage/{role}/{vs_hero_id}` — Objective 1, full ranked
   list for a role vs. one opponent, wraps `hero_matchup_advantage`.
-- `POST /draft-suggestions` — Objective 2, body `{"opponent_picks": [id,...]}`
-  (1-5 ids, no dupes). Stateless: mirrors `draft_suggester.py`'s weighted-sum
-  logic, but the caller resends the full accumulated pick list each call
-  instead of the server holding session state.
+- `POST /draft-suggestions` — Objective 2, body `{"opponent_picks": [id,...],
+  "ally_picks": [id,...]}` (`opponent_picks` 1-5 ids required, no dupes;
+  `ally_picks` 0-5 ids optional, no dupes, must not overlap
+  `opponent_picks`). Stateless: mirrors `draft_suggester.py`'s weighted-sum
+  logic, but the caller resends the full accumulated pick lists each call
+  instead of the server holding session state. Each candidate's
+  `total_advantage` now sums shrunk matchup advantage (vs `opponent_picks`)
+  and shrunk synergy (with `ally_picks`) — see the Phase 2 step 2 entry
+  below. `DraftSuggestion.synergy_breakdown` is additive to the response
+  shape (empty list when `ally_picks` is omitted). Optional
+  `player_account_id` (Phase 2 step 4): if given, must be a known id in
+  `players` (404 otherwise) and each suggestion gets a `player_history`
+  field (`games_played`/`wins`/`win_rate`, `null` if that player has no
+  games on that hero — e.g. a private profile with no data pulled).
+  Annotation only, does not affect ranking — see the step 4 entry below.
+- `GET /players` — public players only (id/name pairs), backs the web
+  frontend's player-history selector. Added alongside the web UI build-out
+  below; private players exist in the `players` table but are filtered out
+  here since they have no `player_hero_stats` rows to show.
 - Interactive docs at `/docs`.
 
 **Web** (`web/`, static HTML/CSS/vanilla JS — the current primary UI):
@@ -86,7 +101,21 @@ before deploying. Two pages, dark "Draft Terminal" theme matching
   clickable — expands inline sub-rows (same list, not a separate table)
   showing each opponent's individual advantage, sorted descending
   server-side (`_build_suggestion`). Mobile gets a segmented best/worst
-  toggle instead of the two-column grid.
+  toggle instead of the two-column grid. **Ally picks** (Phase 2 step 2):
+  a second chip section mirroring opponent picks exactly (`state.allyPicks`,
+  its own combo/add/reset), sent as `ally_picks`. The two hero combos
+  mutually exclude each other's picks (can't pick the same hero as both an
+  opponent and an ally) — `options` callbacks filter against both
+  `state.opponentPicks` and `state.allyPicks`. Expanding a row now also
+  shows synergy sub-rows (`↳ with <hero>`) after the existing matchup
+  sub-rows (`↳ vs <hero>`), from `synergy_breakdown`. **Player history**
+  (Phase 2 step 4): a single-select combo (same `setupCombo()` pattern as
+  the matchup page's role/hero selectors, not the chip pattern) sourced from
+  the new `GET /players` endpoint, sent as `player_account_id`. When a
+  player is selected, each row's WR line grows a `· You: Ng, W% WR` suffix
+  from `player_history`; clearing the player removes it. Purely additive to
+  the row — matches the "annotate only" decision from step 4, doesn't touch
+  ranking or bar width.
 - `js/combo.js` — the searchable-combobox widget (`setupCombo()`) shared by
   both pages; `options` can be a static array or a callback (draft.js uses a
   callback so the hero-picker's option list stays live-filtered against
@@ -116,7 +145,13 @@ before deploying. Two pages, dark "Draft Terminal" theme matching
 - No automated JS test framework wired up; verified via a throwaway
   Playwright script driving a real headless Chromium against the live API
   (chips, tab switching, click-to-expand + sort order, WR coloring, CORS,
-  tier highlighting all confirmed working end-to-end).
+  tier highlighting all confirmed working end-to-end). Same approach used
+  to verify the ally-picks/player-history UI: opponent+ally chip add/remove,
+  mutual exclusion between the two hero combos, player select/clear, full
+  reset, and the expanded row's `↳ vs`/`↳ with` sub-row values — all
+  cross-checked against the exact numbers already verified against the API
+  directly (Bloodseeker vs Anti-Mage + Pudge ally = 5.58% matchup + -0.44%
+  synergy = 5.14% total, AAA's 21g/61.9% WR on Bloodseeker).
 
 **Dashboard** (`src/app/dashboard/`, Streamlit) — superseded by `web/` above,
 kept in the repo but not the primary UI anymore. `streamlit run
@@ -133,10 +168,21 @@ is confirmed working in production.
 - `load_stratz_heroes.py` — Stratz hero constants + winWeek/winDay/ban stats → `stratz_heroes`, `stratz_hero_stats`, `stratz_hero_win_week`, `stratz_hero_win_day`, `stratz_hero_bans`.
 - `load_stratz_matchups.py` — Stratz `matchUp`, summed over the latest 2 weeks (see gotcha below) → `stratz_hero_matchups`.
 - `load_heroes_roles.py` — loads `data/hero_role.csv` (hero → Carry/Midlane/Offlane/Supports, hand-curated by the user) → `roles_csv_import`, `hero_roles_csv_import`.
+- `load_stratz_synergy.py` — Phase 2 step 1. Stratz `matchUp`'s `with` field (duo win rates, heroes on the same team), summed over the latest 2 weeks like `load_stratz_matchups.py` → `stratz_hero_synergy` (`hero_id`, `with_hero_id`, `games_played`, `wins`, `synergy`; directed pair, PK on both columns). 16,002 rows = full 127×126 directed matrix. `synergy` is Stratz's own precomputed TrueSynergy offset (per user request), games-played-weighted across the 2 weeks since it's a per-week ratio, not a raw count — can't just be summed like `games_played`/`wins`.
+- `load_players.py` — Phase 2 step 3. Parses the hand-curated `docs/players_id.txt` (`Name: account_id. Profile status: public|private.`) → `players` (all players, public and private). For players marked public only, fetches OpenDota `/players/{account_id}/heroes` → `player_hero_stats` (per-hero `games_played`/`wins`/`with_*`/`against_*`/`last_played`, zero-game rows skipped). Private profiles are recorded in `players` (so they're known) but no history is fetched for them — OpenDota returns all-zero data for private profiles anyway, and it'd just be wasted API calls. Stratz is *not* used for player history — see gotcha below.
 
 **Engine** (`src/app/engine/`):
 - `compute_hero_matchup_advantage.py` — Objective 1. Builds `hero_matchup_advantage`: for each role list (Carry/Midlane/Offlane) and each possible opponent, ranks all heroes in that role by matchup advantage. Log5 (Bill James) expected-win-rate formula isolates matchup-specific edge from each hero's general form.
-- `draft_suggester.py` — Objective 2. Interactive CLI: enter up to 5 enemy picks one at a time, get top-10-best/worst per role after each pick, weighted 0.8 for Support picks / 1.0 otherwise, excludes already-picked heroes.
+- `draft_suggester.py` — Objective 2. Interactive CLI: prompts up to 5 of
+  your own team's picks up front (`ally_picks`, Phase 2 step 2), then up to
+  5 enemy picks one at a time, get top-10-best/worst per role after each
+  opponent pick, weighted 0.8 for Support opponent picks / 1.0 otherwise,
+  excludes heroes either team has already picked. Each candidate's score is
+  shrunk matchup advantage (vs opponents) + shrunk synergy (with allies) —
+  see the shrinkage entry below. Also prompts once for an optional OpenDota
+  account id (Phase 2 step 4) and, if given, prints that player's own
+  games/win-rate on each suggested hero from `player_hero_stats` inline —
+  annotation only, doesn't change ranking or which heroes are suggested.
 
 Run either engine script directly (`python src/app/engine/...`) — the
 package is pip-installed editable (`pip install -e .`) so `from app.config
@@ -178,6 +224,99 @@ import ...` resolves from any CWD.
 - `hero_role.csv`'s `hero_id` column maps directly to `heroes.id` /
   `stratz_heroes.id` (Valve's hero IDs) — confirmed 1:1, only 3 harmless
   name-casing mismatches (e.g. "BeastMaster" vs "Beastmaster").
+- **`stratz_hero_synergy` is directional and the two directions don't
+  perfectly agree.** Querying `matchUp(heroIds:[1,50]).with` from hero 1's
+  row gives a slightly different `matchCount`/`winCount` for the (1, 50)
+  pair than hero 50's row gives for (50, 1) (e.g. 5841/3059 vs 5757/3019 in
+  one snapshot — Stratz-side sampling, not a bug on our end). Stored as-is,
+  same convention as `stratz_hero_matchups` (directed `hero_id`/other-hero
+  columns, no forced symmetry). Also note: Stratz's `with` data exposes a
+  pre-computed `synergy` field (their own TrueSynergy offset) alongside the
+  raw `matchCount`/`winCount` — per user request this **is** pulled and
+  stored (unlike the sibling `winRateHeroId1`/`winRateHeroId2`/`winsAverage`
+  fields, which weren't asked for and were skipped). Since `synergy` is a
+  per-week ratio, not a raw count, it can't be summed across the 2-week
+  window the way `games_played`/`wins` can — `load_stratz_synergy.py`
+  combines the 2 weeks as a `games_played`-weighted average instead. Phase 2
+  step 2 can still independently recompute an expected-WR offset the same
+  log5 way `compute_hero_matchup_advantage.py` does for Objective 1, using
+  the raw `games_played`/`wins` columns, if that ends up preferred over
+  trusting Stratz's own metric.
+- **Phase 2 step 2 — synergy folded into `draft-suggestions`, shrunk by
+  sample size.** Design (chosen after presenting alternatives to the user):
+  extend `opponent_picks`-only scoring to also take `ally_picks`, and sum
+  shrunk matchup advantage (vs opponents) + shrunk synergy (with allies)
+  into one score per candidate, same as `hero_matchup_advantage.advantage`
+  is already the sole signal today. `SHRINKAGE_K = 500` (duplicated as a
+  module constant in both `draft_suggester.py` and `api/routers/draft.py`,
+  not centralized — small enough constant that a shared config felt like
+  premature abstraction) implements the empirical-Bayes note added to
+  `proj_obj.txt` Phase 2 step 2: `delta_adjusted = delta_raw * n/(n+K)`,
+  applied to **both** `advantage` (n = `stratz_hero_matchups.games_played`,
+  joined in) and `synergy` (n = `stratz_hero_synergy.games_played`, already
+  stored) — small-sample pairs get pulled toward 0 instead of dominating the
+  ranking. `synergy` is also `/100`'d before shrinking/summing to match
+  `advantage`'s fraction scale (see the unit-mismatch note above). Shrinkage
+  is scoped to the draft-suggestion formula only — `hero_matchup_advantage`
+  itself and the standalone `GET /matchup-advantage/{role}/{vs_hero_id}`
+  (Objective 1) are untouched, since the shrinkage note was raised
+  specifically in the context of combining signals for pick suggestions.
+  Ally weighting is uniform (1.0, no Support/non-Support split) — that
+  discount only made sense for opponent picks (matters less to counter a
+  support) and wasn't asked for on the ally side.
+- **Deferred: lane-specific synergy split (`proj_obj.txt` Phase 2 step 2,
+  note b).** Stratz does expose a laning-phase-specific query —
+  `heroStats.laneOutcome(heroId, isWith: true, positionIds: [...])` →
+  `HeroLaneOutcomeType` — confirmed via live schema introspection. But
+  unlike `matchUp.with`, it only returns raw `matchCount`/`winCount`/
+  `lossCount` for the laning phase, no precomputed TrueSynergy-style offset,
+  so using it would mean a new ingestion table (`stratz_hero_lane_synergy`
+  or similar) plus writing our own log5 expected-WR math for it — step-1
+  (ingestion) scope, not step-2 (scoring). Deliberately not pulled in this
+  pass since the user scoped the Phase 2 step 2 work to "Engine + API only."
+  The blanket `stratz_hero_synergy.synergy` field is used as-is for now.
+- **Stratz's `player.heroesPerformance` is capped at ~10 total matches under
+  the default API token, regardless of the player's actual match count.**
+  Confirmed against two very different accounts — the user's own public
+  player (6,101 lifetime matches per Stratz's own `player.matchCount`) and
+  an unrelated, very active public pro account (24,876 matches) — both
+  capped identically at ~10 matches spread across 6-9 heroes. Not
+  player-specific; a tier restriction on that aggregate endpoint
+  specifically (`player.matches`, the raw per-match list, is *not* similarly
+  capped — paginates fine up to `take: 100`/call — so full history is
+  technically reachable, just not via the convenient pre-aggregated field).
+  Per user decision, Phase 2 step 3 (`load_players.py`) uses **OpenDota
+  only** for player history (`/players/{account_id}/heroes` is not capped
+  this way and returns full lifetime per-hero stats) — Stratz was tried
+  first (`load_stratz_players.py`), found broken for this purpose, and
+  deleted along with its `stratz_player_hero_stats` table rather than kept
+  with near-meaningless data. If a paid Stratz tier is added later, or the
+  raw-match-pagination-and-aggregate-ourselves approach becomes worth the
+  ~60+ paginated calls/player it'd take for an active player, revisit.
+- **`players_id.txt` is the source of truth for who to pull and whether
+  they're public**, parsed directly by `load_players.py` (regex on the
+  `Name: account_id. Profile status: public|private.` format) — no
+  duplicate CSV was created under `data/` for this, unlike `hero_role.csv`,
+  since the source file already lives in a fixed, simple format. Re-run
+  `load_players.py` after the user updates a player's status in that file
+  to public.
+- **Phase 2 step 4 — personal history is annotate-only, not a scoring
+  signal.** Presented 3 options (blend into `total_advantage` like synergy,
+  filter candidates to the player's hero pool, or annotate without
+  affecting ranking); user picked annotate-only. Reason worth remembering:
+  personal per-hero sample sizes are far noisier than the global data
+  synergy/matchup already shrink — for the one public player loaded so far,
+  median is 24 games/hero and 28/115 heroes have fewer than 10 games (min
+  2) — two to three orders of magnitude smaller than the `stratz_hero_*`
+  sample sizes `SHRINKAGE_K=500` was tuned against, so folding it into the
+  score would need its own (probably much smaller) K and a baseline
+  decision (self-relative log5 delta vs. global-hero-relative) that wasn't
+  worth resolving for a first pass. `player_account_id` (optional, on
+  `DraftRequest` and prompted once in `draft_suggester.py`) only attaches
+  `player_history` (`games_played`/`wins`/`win_rate`) to each suggestion
+  from `player_hero_stats` — ranking is untouched, identical to omitting
+  it. If a blended version is wanted later, the shrinkage machinery already
+  built for step 2 (`_shrink`, the `n/(n+K)` pattern) generalizes directly.
 
 ## Next up
 
