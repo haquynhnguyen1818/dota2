@@ -76,13 +76,21 @@ before deploying. Two pages, dark "Draft Terminal" theme matching
 - `index.html` (`js/draft.js`) — Objective 2. Opponent picks as removable
   chips (native flexbox `flex-wrap`, no framework needed — sizes to content
   and wraps on overflow for free, unlike the Streamlit version which needed
-  a CSS workaround for the same thing). Carry/Midlane/Offlane tabs, top-10
-  best/worst lists with a WR column (green ≥50%) and a bar visualizing
-  advantage magnitude. Rows are clickable — expands inline sub-rows (same
-  list, not a separate table) showing each opponent's individual advantage,
-  sorted descending server-side (`_build_suggestion` in
-  `api/routers/draft.py`). Mobile gets a segmented best/worst toggle instead
-  of the two-column grid.
+  a CSS workaround for the same thing), added via the same searchable
+  combobox as the matchup page (see `js/combo.js` below) rather than a plain
+  `<select>`. Carry/Midlane/Offlane tabs. **Top best returns 20 from the API
+  (`TOP_N_BEST` in `api/routers/draft.py`) but the page only renders the
+  first 10 by default, with a "Show all 20 heroes" button to expand — top
+  worst stays at 10 (`TOP_N_WORST`), no pagination there.** Both lists show a
+  WR column (green ≥50%) and a bar visualizing advantage magnitude. Rows are
+  clickable — expands inline sub-rows (same list, not a separate table)
+  showing each opponent's individual advantage, sorted descending
+  server-side (`_build_suggestion`). Mobile gets a segmented best/worst
+  toggle instead of the two-column grid.
+- `js/combo.js` — the searchable-combobox widget (`setupCombo()`) shared by
+  both pages; `options` can be a static array or a callback (draft.js uses a
+  callback so the hero-picker's option list stays live-filtered against
+  `opponentPicks` without re-initializing the combo on every add/remove).
 - `matchup.html` (`js/matchup.js`) — Objective 1, matches
   `data/matchup-advantage.html`'s mockup (also untouched, kept as reference):
   searchable combobox selectors (custom, not native `<select>` — supports
