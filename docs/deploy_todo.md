@@ -58,38 +58,74 @@ credentials/access but I can drive it once you provide them in-session.
       via `get.docker.com` (had to wait out an `unattended-upgrades` dpkg
       lock first, common on a freshly-booted Droplet). Confirmed: Docker
       29.7.2, Compose v5.5.0.
-- [x] **[TOGETHER]** UFW enabled: allow 22/tcp (SSH) and 80/tcp (HTTP), deny
-      everything else inbound. Verified SSH still reachable after enabling
-      before moving on. 443/tcp not opened yet — add it if/when TLS is set up.
+- [x] **[TOGETHER]** UFW enabled: allow 22/tcp (SSH), 80/tcp (HTTP), and
+      443/tcp (HTTPS, added in Phase 3 for Caddy). Verified SSH still
+      reachable after enabling before moving on.
 
 ## Phase 2 — Migrate the database
 
-- [ ] **[YOU]** Have the Heroku Postgres connection string ready (already in
-      your gitignored `config.py`).
-- [ ] **[TOGETHER]** `pg_dump` from Heroku, restore into the VPS's Postgres.
-      I can write and run the exact commands with you, or write a script for
-      you to run yourself if you'd rather not paste prod DB credentials into
-      chat.
+- [x] **[TOGETHER]** `pg_dump`'d Heroku (12 tables, ~55k rows total) and
+      restored into the Droplet's `db` container via `docker compose exec -T
+      db psql`. Heroku's actual server version is Postgres 18.3 (not 16 as
+      assumed) — Ubuntu 24.04's default `pg_dump` is v16 and refuses to dump
+      a newer server, so had to add the official PGDG apt repo and install
+      `postgresql-client-18` first. One harmless restore error
+      (`unrecognized configuration parameter "transaction_timeout"` — a
+      PG17+ session setting pg_dump 18 emits automatically; PG16 doesn't
+      have it, no schema/data impact). Row counts verified identical on
+      both sides for all 12 tables before treating this as done.
+- [x] Confirmed the point of this exercise: same query
+      (`POST /draft-suggestions`, 2 opponent picks) went from ~1.1-1.4s
+      against Heroku-over-the-internet (already down from ~3.4s pre-pooling)
+      to **~10ms** now that the DB is co-located with the API on the Droplet.
 - [ ] **[YOU]** Decide whether to keep Heroku Postgres around as a fallback
-      for a while, or retire it once the migration is verified.
+      for a while, or retire it now that the migration is verified working.
 
 ## Phase 3 — Deploy the frontend
 
-- [ ] **[YOU]** Create a free Cloudflare Pages or Netlify account, connect it
-      to the GitHub repo (or drag-and-drop the `web/` folder).
-- [ ] **[ME]** Update `web/js/config.js`'s `API_BASE_URL` to the VPS's
-      domain/IP once it exists.
-- [ ] **[YOU/ME]** Trigger the deploy — auto-deploys on push if connected to
-      GitHub.
+- [x] **[YOU]** Created a Cloudflare account, connected the GitHub repo.
+      First deploy failed: Cloudflare built from the repo root, found
+      `pyproject.toml`, and tried `pip install .` (wrong Python version too —
+      Cloudflare's build image has 3.13, we require >=3.14) instead of just
+      serving `web/`. Fixed by setting **Root directory** to `web`, **Build
+      command** empty, **Framework preset** None — `web/` has no build step
+      at all, it's just served as-is. Live at
+      `https://dota2.haquynh-nguyen.workers.dev` (Cloudflare's unified
+      Workers/Pages platform — functionally a normal Pages static-site deploy).
+- [x] **[ME]** HTTPS for the API: no custom domain, so used the free
+      `sslip.io` wildcard-DNS trick (`165-22-246-179.sslip.io` resolves
+      straight to the Droplet's IP) + Caddy as a reverse proxy in front of
+      the `api` container — Caddy auto-provisions and renews a real Let's
+      Encrypt cert for that hostname with zero manual cert management.
+      Necessary because Cloudflare serves the frontend over HTTPS, and
+      browsers block HTTPS pages from calling a plain-HTTP API ("mixed
+      content") — the API had to be HTTPS too, not just reachable.
+- [x] **[ME]** `web/js/config.js` now auto-detects local dev
+      (`localhost`/`127.0.0.1`) vs. production, pointing at
+      `https://165-22-246-179.sslip.io` in the deployed site. `ALLOWED_ORIGINS`
+      on the Droplet tightened from `["*"]` to the real
+      `https://dota2.haquynh-nguyen.workers.dev` origin.
+- [x] Committed and pushed everything from this session (it had never been
+      pushed before this point) — Cloudflare auto-deploys on push. Watched
+      out for Cloudflare's edge-cache propagation lag (new deploys can serve
+      inconsistently across POPs for ~1-2 min before settling globally).
 
 ## Phase 4 — Deploy the backend
 
-- [ ] **[TOGETHER]** On the Droplet: clone the repo, copy `infra/.env.example`
-      to `infra/.env` and fill in real values, then `docker compose -f
-      infra/docker-compose.yml up -d --build`.
+- [x] **[TOGETHER]** Cloned the repo onto the Droplet, `infra/.env` filled
+      with a freshly-generated DB password (not reused from Heroku),
+      `docker compose -f infra/docker-compose.yml up -d --build`. Image
+      includes `streamlit` as an unused dependency (still in
+      `pyproject.toml` since the old dashboard hasn't been removed) — harmless,
+      just a few extra MB in the image.
 
 ## Phase 5 — Verify and cut over
 
-- [ ] **[TOGETHER]** Smoke test both pages against the production API.
-- [ ] **[YOU]** Point any custom domain's DNS at the new hosts, if using one.
-- [ ] **[YOU]** Decide when to fully decommission Heroku.
+- [x] **[TOGETHER]** Full production smoke test: real headless-browser run
+      against the live `https://dota2.haquynh-nguyen.workers.dev` calling the
+      live `https://165-22-246-179.sslip.io` API — both pages load real data,
+      zero console/network errors, no CORS or mixed-content issues.
+- [ ] **[YOU]** No custom domain in use (by choice) — nothing to point DNS
+      at. Revisit if a real domain gets added later.
+- [ ] **[YOU]** Decide when to fully decommission Heroku (Postgres migrated
+      and verified in Phase 2; nothing left depending on it).
