@@ -3,7 +3,7 @@ name = "dota2"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-    "psycopg[binary]",
+    "psycopg[binary,pool]",
     "requests",
     "fastapi",
     "uvicorn[standard]",

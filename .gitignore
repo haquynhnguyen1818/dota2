@@ -4,3 +4,4 @@ __pycache__/
 *.egg-info/
 src/app/config.py
 database_local.py
+infra/.env
