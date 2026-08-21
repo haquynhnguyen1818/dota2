@@ -23,7 +23,7 @@ def _conninfo() -> str:
     user = os.environ.get("DB_USER", creds_opendota.get("user", ""))
     password = os.environ.get("DB_PASSWORD", creds_opendota.get("pw", ""))
     dbname = os.environ.get("DB_NAME", creds_opendota.get("db", ""))
-    sslmode = os.environ.get("DB_SSLMODE", "require")
+    sslmode = os.environ.get("DB_SSLMODE", creds_opendota.get("sslmode", "require"))
     if not all([host, user, dbname]):
         raise RuntimeError(
             "Database not configured: set DB_HOST/DB_USER/DB_PASSWORD/DB_NAME "
