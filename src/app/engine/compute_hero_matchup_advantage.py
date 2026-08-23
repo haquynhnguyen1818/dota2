@@ -2,8 +2,22 @@
 
 For each opponent, ranks all heroes in a role list from best matchup
 (rank 1) to worst, using log5 (Bill James) expected win rate to isolate
-matchup-specific edge from each hero's win rate over the latest 2 weeks.
-See dota2_ranking_adv.txt for the spec.
+matchup-specific edge from each hero's win rate.
+
+hero_wr/vs_hero_wr are derived from stratz_hero_matchups itself (each
+hero's games-played-weighted win rate across all its matchup rows), not
+from stratz_hero_win_week. Stratz's matchUp field samples a "significant
+interaction" subset of games rather than a uniform slice of every match
+(confirmed via live API: matchUp's total games-played summed across all
+opponents runs ~1.3-1.7x winWeek's total, not ~1x or ~5x as either a
+single-opponent or all-5-opponents model would predict), so the two
+tables measure different populations. Log5's baseline only isolates a
+real matchup-specific residual if it's computed on the same population
+as wr_a_b — using winWeek's blanket win rate as that baseline caused
+heroes with unusual play patterns (Arc Warden, Visage, Meepo, Broodmother,
+Lone Druid) to show a systematic positive advantage against nearly every
+opponent, since their winWeek win rate ran meaningfully below their own
+matchUp-population win rate. See dota2_ranking_adv.txt for the spec.
 """
 import psycopg
 
@@ -25,15 +39,9 @@ CREATE TABLE IF NOT EXISTS hero_matchup_advantage (
 """
 
 COMPUTE_AND_INSERT = """
-WITH ranked_weeks AS (
-    SELECT hero_id, wins, games_played,
-           ROW_NUMBER() OVER (PARTITION BY hero_id ORDER BY week DESC) AS rn
-    FROM stratz_hero_win_week
-),
-latest_hero_wr AS (
+WITH latest_hero_wr AS (
     SELECT hero_id, SUM(wins)::numeric / SUM(games_played) AS wr
-    FROM ranked_weeks
-    WHERE rn <= 2
+    FROM stratz_hero_matchups
     GROUP BY hero_id
 ),
 role_heroes AS (
