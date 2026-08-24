@@ -55,10 +55,9 @@ Rubick     bucket 2: 53.7%  →  bucket 12: 48.2%   (falls)
 ```
 
 `durationMinute` is a **bucket index (0–14), not a minute value**. Buckets
-present: `[0, 2, 3, …, 14]` (1 is absent — games essentially never end between
-5 and 10 minutes). Median falls in bucket 7, which pins it at 5-minute buckets
-(≈35–40 min, matching real Dota). **Confirm this mapping in step A2 before
-labelling a chart axis.**
+present: `[0, 2, 3, …, 14]` — 1 is absent entirely. A2 pinned the mapping at
+5 minutes wide: bucket `b` = `[5b, 5b+5)`, bucket 14 = 70+. See A2 for how
+that was established and why the obvious cross-check doesn't work.
 
 **Item timings do NOT need parsed matches.** The original doc says they require
 `purchase_log` and suggests approximating from GPM ÷ item cost. Wrong for us:
@@ -146,12 +145,29 @@ rows) and means a later change to the window needs no re-ingest.
 > The landmine was also confirmed empirically: `ROW_NUMBER() <= 2` on the new
 > table keeps 2 rows spanning 1 week and 2 buckets, exactly as warned.
 
-**A2.** Pin the bucket→minute mapping empirically (cross-check bucket counts
-against `heroStats.stats` with `minTime`/`maxTime`), then document it in
-progress.md.
+**A2.** Pin the bucket→minute mapping and document it in progress.md.
 
-> **Verify:** mapping confirmed by a second independent query, not inference
-> from the median alone.
+**Result: bucket `b` = minutes `[5b, 5b+5)`, bucket 14 = 70+.**
+
+> **Verify — done 2026-08-24, with a caveat.** The mapping rests on a
+> *structural* argument, not a direct measurement. Stratz's per-minute data
+> caps at 75 min (`stats` with `minTime:60, maxTime:100` returns only rows
+> 60..75) and `winWeek` exposes bucket indices 0..14 — width 5 is the only
+> width whose top bucket lands on that cap (width 4 caps at 60, width 6 needs
+> 90). Corroborated by the median falling in bucket 7 → 35-40 min.
+>
+> The planned cross-check against `heroStats.stats` **does not work and should
+> not be retried**: that endpoint covers only ~31% of the matches `winWeek`
+> does for the same hero and week (231,702 vs 745,573) because it is a
+> parsed-match subset, which skews longer (median 42 min). Inverting its
+> survival CDF against bucket fractions gives incoherent widths drifting
+> 3.1→6.1 min. No available argument reconciles the two populations.
+
+> ⚠️ **Chart buckets 3-13 only (15-70 min, 98.3% of games).** Bucket 0 is
+> anomalous — 1.05% of games, larger than bucket 2 (0.46%), while bucket 1 has
+> exactly zero rows in all 33,782. That reads as a catch-all bucket, not a
+> literal 0-5 min bin. Bucket 14 (70+) is a 0.12% tail. Phase C's axis should
+> run 15→70 min and leave the edge buckets out.
 
 ## Phase B — Context builder + endpoint · me · ~1 evening
 

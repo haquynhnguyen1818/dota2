@@ -210,6 +210,25 @@ import ...` resolves from any CWD.
   and `hero_wr` cover the same window. If `hero_wr`'s window changes again
   (e.g. "latest 3 weeks"), `load_stratz_matchups.py` must change to match,
   or the advantage numbers will look subtly wrong again.
+- **Duration buckets are 5 minutes wide: bucket `b` = minutes `[5b, 5b+5)`,
+  bucket 14 = 70+.** Established structurally, not by direct measurement.
+  Stratz's per-minute data caps at 75 min (`stats` with `minTime:60,
+  maxTime:100` returns rows 60..75 only), and `winWeek` exposes bucket indices
+  0..14 — width 5 is the *only* width where the top bucket lands on that cap
+  (14×5 = 70-75; width 4 caps at 60, width 6 needs 90). Corroborated by the
+  median landing in bucket 7 → 35-40 min, which matches real Dota.
+  **Why there is no direct confirmation:** `heroStats.stats` is the only
+  endpoint exposing a per-minute survival curve, but it covers just ~31% of
+  the matches `winWeek` does for the same hero and week (231,702 vs 745,573)
+  — it is a *parsed-match* subset, which skews longer (its median is 42 min
+  vs bucket 7's 35-40). Inverting its CDF against bucket fractions yields
+  incoherent widths drifting 3.1→6.1 min, so it cannot serve as proof. Don't
+  redo that cross-check expecting it to work.
+- **Trust duration buckets 3-13 only (15-70 min, 98.3% of games).** Bucket 0
+  is anomalous — 1.05% of games, *larger* than bucket 2 (0.46%), while bucket
+  1 has exactly zero rows across all 33,782 rows. That pattern reads like a
+  catch-all/unknown bucket rather than a literal 0-5 min bin, so don't label
+  it as minutes or lean on it. Bucket 14 (70+) is a 0.12% tail.
 - **Rolling up "latest 2 weeks" — `ROW_NUMBER` vs `DENSE_RANK` depends on the
   table's shape.** `compute_hero_matchup_advantage.py` uses `ROW_NUMBER() OVER
   (PARTITION BY hero_id ORDER BY week DESC) <= 2` on `stratz_hero_win_week`.
