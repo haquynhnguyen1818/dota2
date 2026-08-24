@@ -83,6 +83,17 @@ pushed to https://github.com/haquynhnguyen1818/dota2 (main).
   field (`games_played`/`wins`/`win_rate`, `null` if that player has no
   games on that hero — e.g. a private profile with no data pulled).
   Annotation only, does not affect ranking — see the step 4 entry below.
+- `POST /draft-analysis` — Post-draft coach, Phase B3 (see `coaching_plan.md`).
+  Body `{"my_hero_id": id, "my_role": "Carry|Midlane|Offlane|Supports",
+  "ally_picks": [5 ids], "enemy_picks": [5 ids]}`. **Requires exactly 5 and 5**
+  — this fires once a draft is complete, unlike `/draft-suggestions` which
+  answers mid-draft from partial picks. `my_hero_id` must be in `ally_picks`;
+  teams may not overlap or contain dupes. `my_role` is required, not inferred
+  (`hero_role.csv` is scoped to the pick-suggester and the coach doesn't read
+  it); it's carried through for the later LLM phase and doesn't affect the
+  curve. Returns the power curve per duration bucket (`my_win_rate`,
+  `their_win_rate`, `delta`), the `crossover_bucket`, and a `tempo_verdict`
+  of `you_are_faster`/`you_win_long`/`even`/`unknown`.
 - `GET /players` — public players only (id/name pairs), backs the web
   frontend's player-history selector. Added alongside the web UI build-out
   below; private players exist in the `players` table but are filtered out
@@ -365,9 +376,13 @@ import ...` resolves from any CWD.
 
 ## Next up
 
-- No automated tests exist yet for the engine or API logic (correctness
-  has only been spot-checked manually/interactively so far, incl. live
-  smoke tests of all 4 API endpoints against the real DB).
+- **Tests now exist, but only for `engine/draft_context.py`.** `tests/` +
+  pytest (`pip install -e ".[dev]"`, then `pytest`) landed with Phase B —
+  16 tests, no DB needed, since `build_context` is pure. Everything else
+  (the matchup/draft engine, all API routers) is still spot-checked manually
+  only. `draft_context.py` is deliberately split so scoring is pure and
+  `load_bucket_stats` holds the only DB access — worth copying if the older
+  engine code ever gets tests.
 - `database_local.py` (a pre-reorg leftover with a real DB password and a
   live Stratz API JWT token) has been deleted and gitignored — if a copy
   surfaces again (e.g. from an old branch or backup), don't recommit it,
