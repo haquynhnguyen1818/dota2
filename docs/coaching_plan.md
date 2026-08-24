@@ -1,0 +1,311 @@
+# Post-Draft Coach — build plan
+
+Spec for the post-draft coaching feature. Supersedes the original
+`dota_coaching.md` planning doc, which has been deleted — everything still
+relevant from it was folded in here, corrected against the actual codebase and
+the live Stratz API. `proj_obj.txt` covers Phase 1/2 (the shipped draft
+suggester); `progress.md` has current status and gotchas.
+
+## What this is
+
+A coach that fires **once a draft is complete** — both teams have 5 heroes —
+and tells you how to play the game you just got. Deterministic context first,
+LLM synthesis later.
+
+**This is a separate product from the existing draft suggester.** The
+suggester answers "who should I pick next?" with partial information during
+the draft and is unchanged by any of this. The coach answers "how do I win
+this specific 5v5?" after picking is over.
+
+## Locked decisions
+
+| Decision | Value | Why |
+|---|---|---|
+| Time basis | Rolling 2 weeks, everywhere | Matches `hero_wr`/`wr_a_b`. Mixed time bases are the documented cause of "numbers look off" — see progress.md |
+| `patch` column | **Dropped** from all new tables | Current patch 7.40b has been live since 2025-12-24 (~8 months), so patch-partitioning yields one giant bucket anyway |
+| Trigger | Complete 5v5 draft | Not incremental. The suggester owns the incremental case |
+| Existing suggester | Untouched | No edits to `hero_matchup_advantage`, `stratz_hero_win_week`, `/draft-suggestions`, or `index.html`'s existing panels |
+| UI location | Panel on `index.html`, unlocks at 5v5 | Reuses the chips already on screen; natural flow out of drafting |
+| Lane/position source | `heroStats.stats` empirical positions | `hero_role.csv` stays scoped to the pick-suggestion feature and is not consulted by the coach. Consequence: `my_role` is a required input, not inferred — see B3 |
+| Branches (orig. Phase 5) | Deferred | Revisit after the LLM phase works |
+
+## Verified findings
+
+Checked live against the Stratz API and the production DB on 2026-08-24. These
+correct the original doc, all in our favour.
+
+**We ingest no match-level data at all.** The original doc assumes OpenDota
+`/publicMatches`. We have none — everything is pre-aggregated hero-level stats.
+This turns out not to matter, because Stratz pre-aggregates what Phase 0 needs.
+
+**`stratz_hero_win_week.duration_minute` is a dead all-zeros column.** It is in
+the table's primary key ([load_stratz_heroes.py:164](../src/app/ingestion/load_stratz_heroes.py#L164))
+but `fetch_win_week` never passes a `groupBy`, so Stratz returns 0 for every
+row. Verified in production: 2,540 rows, `SELECT DISTINCT duration_minute` →
+`[0]`.
+
+**Duration win rates are one query argument away.** `winWeek(groupBy:
+HERO_ID_DURATION_MINUTES)` returns per-bucket counts. One API call covers all
+126 heroes × 2 weeks × ~14 buckets = 3,528 rows. Verified output:
+
+```
+Anti-Mage  bucket 2: 45.4%  →  bucket 12: 52.0%   (rises)
+Pudge      bucket 2: 54.3%  →  bucket 12: 49.2%   (falls)
+Rubick     bucket 2: 53.7%  →  bucket 12: 48.2%   (falls)
+```
+
+`durationMinute` is a **bucket index (0–14), not a minute value**. Buckets
+present: `[0, 2, 3, …, 14]` (1 is absent — games essentially never end between
+5 and 10 minutes). Median falls in bucket 7, which pins it at 5-minute buckets
+(≈35–40 min, matching real Dota). **Confirm this mapping in step A2 before
+labelling a chart axis.**
+
+**Item timings do NOT need parsed matches.** The original doc says they require
+`purchase_log` and suggests approximating from GPM ÷ item cost. Wrong for us:
+`heroStats.itemFullPurchase(heroId)` works on the free token and returns the
+full per-minute purchase-time distribution with `matchCount`/`winCount` (491
+rows for Anti-Mage). We get real medians. `heroId` is singular → 126 calls,
+trivial against 2000/hr.
+
+**Lane distribution is one call.** `heroStats.stats(heroIds:[…],
+groupByPosition:true)` returns counts per POSITION_1..5 (Anti-Mage: 90% pos 1).
+It will disagree with the hand-curated `hero_role.csv`; step E1 the final decision is to go with heroStats.stats and ignore hero_role.csv which is applicable to hero pick suggestion feature only.
+
+**`take` on `winWeek` counts weeks, not rows.** Checked because the existing
+`take: 2000` looked like it might truncate 2,394 rows. It does not — `take=2`
+returns 2 weeks for every hero requested. No bug in the existing pipeline.
+
+## ⚠️ The landmine
+
+**Do not add `groupBy` to the existing `stratz_hero_win_week` load.**
+
+[compute_hero_matchup_advantage.py:29](../src/app/engine/compute_hero_matchup_advantage.py#L29)
+computes `hero_wr` with:
+
+```sql
+ROW_NUMBER() OVER (PARTITION BY hero_id ORDER BY week DESC) AS rn ... WHERE rn <= 2
+```
+
+That takes the two most recent **rows**, which is correct only because there is
+exactly one row per hero-week today (verified: 2,540 rows = 127 heroes ×
+20 weeks). Turn on duration grouping and it silently takes two duration buckets
+of a single week instead of two weeks — quietly corrupting `hero_wr` →
+`xwr_a_b` → `advantage`, i.e. the entire shipped Objective 1 and 2 output, with
+no error anywhere.
+
+Duration data goes in its own table. The existing pipeline gets zero edits.
+
+---
+
+## Phase A — Duration data · me · ~1–1.5 hours
+
+Cheap because the discovery cost is already paid: the `groupBy` argument,
+`take`'s week semantics, bucket density, and the free-tier limits were all
+confirmed against the live API before this plan was written. A1 is ~40 minutes
+of mechanical work adapted from existing loaders; A2 carries the only real
+uncertainty in the phase.
+
+**A1.** New `src/app/ingestion/load_stratz_hero_duration.py` → new table:
+
+```sql
+stratz_hero_duration_wr (
+    hero_id         INTEGER REFERENCES stratz_heroes(id),
+    week            BIGINT,
+    duration_bucket INTEGER,
+    games_played    INTEGER,
+    wins            INTEGER,
+    PRIMARY KEY (hero_id, week, duration_bucket)
+)
+```
+
+**Scope: all heroes, all available weeks** — 33,516 rows (126 heroes × 19 weeks
+× 14 buckets), measured live. The grid is perfectly dense: every hero-week has
+exactly 14 buckets, so there is no missing-bucket case to handle at ingest.
+
+Stores raw weeks like `stratz_hero_win_week` does; the 2-week rollup happens at
+query time, same convention as the rest of the pipeline. Fetching all weeks
+rather than just 2 costs the same single API call (`take` counts weeks, not
+rows) and means a later change to the window needs no re-ingest.
+
+> ⚠️ **The landmine applies here too, in a new form.** This table has 14 rows
+> per hero-week, so any consumer rolling up "the latest 2 weeks" must filter on
+> *weeks* — `DENSE_RANK() OVER (ORDER BY week DESC) <= 2`, or an explicit
+> `week IN (...)` — never `ROW_NUMBER() <= 2`, which would silently return two
+> duration buckets of a single week. Same trap as
+> `compute_hero_matchup_advantage.py`, different table.
+
+> **Verify:** 33,516 rows. Anti-Mage's curve rises (bucket 2: 45.4% → bucket
+> 12: 52.0%), Pudge's and Rubick's fall. `stratz_hero_win_week` row count
+> unchanged at 2,540.
+
+**A2.** Pin the bucket→minute mapping empirically (cross-check bucket counts
+against `heroStats.stats` with `minTime`/`maxTime`), then document it in
+progress.md.
+
+> **Verify:** mapping confirmed by a second independent query, not inference
+> from the median alone.
+
+## Phase B — Context builder + endpoint · me · ~1 evening
+
+**B1.** `src/app/engine/draft_context.py` — a pure function:
+
+```python
+build_context(my_hero_id, my_role, ally_picks, enemy_picks) -> DraftContext
+```
+
+**v1 holds the power curve only**: my team's summed win rate per bucket,
+theirs, the delta, the crossover bucket, and a `tempo_verdict`. No
+`predicted_lane`, no `enemy_clocks`, no comp tags — those are Phase G inputs,
+not chart inputs, and holding them back is what keeps this to one evening.
+
+The full shape, which Phase E4 builds toward and Phase G consumes:
+
+```json
+{
+  "power_curve": { "0-25": 4.1, "25-35": 1.2, "35-45": -3.8, "45+": -6.2 },
+  "tempo_verdict": "you_are_faster",
+  "predicted_lane": { "vs": ["Abaddon", "Bane"], "with": ["Warlock"],
+                      "matchup_delta": -2.4 },
+  "enemy_clocks": [ { "hero": "Anti-Mage", "item": "Manta", "min": 24 } ],
+  "my_comp":    { "lockdown": 3, "save": 1, "waveclear": 2, "tower_dmg": 1 },
+  "their_comp": { "lockdown": 2, "save": 2, "dispel": 2, "silence": 1 }
+}
+```
+
+Bucket keys above are illustrative — the real ones come from Stratz's 14
+buckets once A2 pins the mapping. `matchup_delta` and the `with` figures come
+from the already-shipped `hero_matchup_advantage` and `stratz_hero_synergy`
+paths, not a reimplementation.
+
+**B2.** **pytest — the first tests in this repo.** Synthetic fixtures, no DB.
+B1 is deterministic by construction, which is what finally makes this easy.
+
+> **Verify:** green suite covering crossover detection, missing buckets,
+> sign-flip, and the no-crossover case.
+
+**B3.** `POST /draft-analysis`:
+
+```json
+{ "my_hero_id": 1, "my_role": "Carry",
+  "ally_picks": [5 ids], "enemy_picks": [5 ids],
+  "player_account_id": null }
+```
+
+Exactly 5 and 5 required — that is the whole point of the post-draft trigger.
+`my_hero_id` must appear in `ally_picks`. Validation otherwise mirrors
+[draft.py](../src/app/api/routers/draft.py). New endpoint, not an extension of
+`/draft-suggestions`.
+
+`my_role` is **required, not inferred**. With `hero_role.csv` scoped out of this
+feature, the only other source would be E1's position data — which doesn't
+exist yet at B3, and would be guessing at something you already know. The C1
+panel needs a "which one is me" selector regardless; role is one more dropdown
+beside it. E1's position data is then used only for `predicted_lane` (working
+out the *enemies'* likely lanes), which is what it is actually good for.
+
+> **Verify:** live smoke test against the real DB, one draft's numbers
+> hand-checked end to end.
+
+## Phase C — Ship the chart · me · ~1 evening
+
+**C1.** Panel on `index.html`, unlocking when both chip lists reach 5, plus a
+"which one is me" selector. No new pick UI.
+
+**C2.** Two-line chart across the buckets with the crossover marked. Inline
+SVG, no library — matches the existing no-framework `web/` stack.
+
+**C3.** Headless-Playwright verification, same approach as the ally-picks and
+player-history work.
+
+**C4.** Deploy: push, `docker compose up -d --build api` on the Droplet,
+Cloudflare auto-deploys `web/`. Confirm before pushing.
+
+> **Labelling constraint:** five heroes' summed duration win rates are a
+> heuristic, not a team win probability — all interaction effects live in the
+> synergy and matchup tables instead. The UI says "power curve," never "win
+> chance." Otherwise this becomes the next number that looks off.
+
+## Phase D — GATE · you · 20 games
+
+Play with just the curve before a single line of prompt gets written. If the
+curve doesn't change your decisions, Phases E–H are wasted effort — and that
+costs one evening to find out instead of six.
+
+## Phase E — Remaining context signals · only if D passes
+
+| Step | Who | Work |
+|---|---|---|
+| E1 `hero_lane_dist` | me | 1 call (`stats(groupByPosition:true)`) → `predicted_lane`. Source decided: empirical positions only, `hero_role.csv` is not consulted |
+| E2 `hero_threat_timing` | me | 126 calls to `itemFullPurchase`, real medians → `enemy_clocks` |
+| E3 `hero_tags.csv` | **you** | 126 heroes × 10 booleans (lockdown, save, dispel, waveclear, tower_dmg, silence, break, cheap_ult, illusion, summons). I generate the skeleton with hero names pre-filled; you fill the values |
+| E4 loader + fold in | me | `load_hero_tags.py` mirroring `load_heroes_roles.py`, then extend `build_context` + tests |
+
+E3 stays hand-authored deliberately — the original doc is right that a derived
+version would be worse, and `hero_role.csv` is the existing precedent.
+
+## Phase F — Patch blob · ~½ evening
+
+Source: **https://www.dota2.com/patches**. Still worth doing for the LLM
+prompt even though `patch` was dropped as a column — the version string pins
+what the model is allowed to assume.
+
+- **you:** confirm whether to scrape that page or paste the notes once.
+- **me:** store the blob with the version string from `constants.gameVersions`
+  (currently `{id: 182, name: "7.40b"}`).
+
+## Phase G — LLM synthesis · ~2 evenings
+
+- **you:** pick provider/model, confirm the spend.
+- **me:** one call — context JSON + patch blob + strict output schema. Central
+  prohibition: *every number in the output must come from the supplied context;
+  if a timing or win rate isn't in the input, don't state one.* Cache keyed on
+  `sha256(sorted_heroes + my_hero + role + patch_version)`.
+
+Output shape:
+
+```json
+{ "frame": "one sentence: who wins long, who must force",
+  "lane":  { "instruction": "...", "first_item": "...", "risk": "..." },
+  "clock": { "your_window": "...", "their_spike": "..." },
+  "wincon": "one sentence",
+  "detail": { "early": "...", "mid": "...", "late": "..." } }
+```
+
+> **Verify:** 15 real drafts, zero hallucinated numbers. **You** are the judge
+> — I can't grade my own output here.
+
+## Phase H — Coach UI · ~1 evening
+
+Default view is four lines — `frame` / `lane` / `clock` / `wincon` — targeting
+**under 90 seconds of reading**. `detail` lives behind an expand, the same
+glanceable-then-drill pattern as the existing bar rows.
+
+**Fire the call automatically when the 10th hero is picked, not on a button**,
+so it has already resolved by the time you look at it. This is why the cache in
+Phase G matters: an auto-fire on every completed draft is only affordable if
+repeat drafts are free.
+
+---
+
+## Critical path
+
+**Step 0 → A → B → C is roughly three evenings**, then the 20-game gate.
+Everything from E onward depends on what D says.
+
+## Deferred
+
+**Branches** (original Phase 5). Pre-generate three lane outcomes (won / even /
+lost) and two mid-game states (ahead / behind), either in a single follow-up
+call at draft time or lazily on tap. In-game this is a **segmented toggle,
+never a text box** — you will not type at minute 14. Revisit after G.
+
+**Outcome logging** — the original doc's "did any of this work?" check, and the
+only real defence against a coach that is fluent and wrong. Method: from Phase
+G onward, log every generated plan keyed by `match_id`; once a week pull those
+matches from OpenDota and check one thing — did the games where you followed
+the plan's clock go better than the ones where you didn't?
+
+Blocked on two things. It needs per-match ingestion
+(`/players/{id}/matches`, which extends `load_players.py` but is real new
+work), and `players_id.txt` currently has only one public player — King Arthas
+and Parma are still private — so the sample would be n=1 for a while.

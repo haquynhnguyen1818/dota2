@@ -5,3 +5,4 @@ __pycache__/
 src/app/config.py
 database_local.py
 infra/.env
+.claude/settings.local.json
