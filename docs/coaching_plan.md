@@ -45,8 +45,8 @@ row. Verified in production: 2,540 rows, `SELECT DISTINCT duration_minute` →
 `[0]`.
 
 **Duration win rates are one query argument away.** `winWeek(groupBy:
-HERO_ID_DURATION_MINUTES)` returns per-bucket counts. One API call covers all
-126 heroes × 2 weeks × ~14 buckets = 3,528 rows. Verified output:
+HERO_ID_DURATION_MINUTES)` returns per-bucket counts, all 127 heroes in a
+single API call. Verified output:
 
 ```
 Anti-Mage  bucket 2: 45.4%  →  bucket 12: 52.0%   (rises)
@@ -64,7 +64,7 @@ labelling a chart axis.**
 `purchase_log` and suggests approximating from GPM ÷ item cost. Wrong for us:
 `heroStats.itemFullPurchase(heroId)` works on the free token and returns the
 full per-minute purchase-time distribution with `matchCount`/`winCount` (491
-rows for Anti-Mage). We get real medians. `heroId` is singular → 126 calls,
+rows for Anti-Mage). We get real medians. `heroId` is singular → 127 calls,
 trivial against 2000/hr.
 
 **Lane distribution is one call.** `heroStats.stats(heroIds:[…],
@@ -118,9 +118,13 @@ stratz_hero_duration_wr (
 )
 ```
 
-**Scope: all heroes, all available weeks** — 33,516 rows (126 heroes × 19 weeks
-× 14 buckets), measured live. The grid is perfectly dense: every hero-week has
-exactly 14 buckets, so there is no missing-bucket case to handle at ingest.
+**Scope: all heroes, all available weeks** — 33,782 rows (127 heroes × 19 weeks
+× 14 buckets). The grid is perfectly dense: every hero-week has exactly 14
+buckets, so there is no missing-bucket case to handle at ingest.
+
+Hero ids come from `stratz_heroes`, never a hardcoded range. The planning
+probe used `range(1, 150)` and silently missed **Largo (id 155)** — one hero's
+entire 266-row grid — which is why the pre-build estimate said 33,516.
 
 Stores raw weeks like `stratz_hero_win_week` does; the 2-week rollup happens at
 query time, same convention as the rest of the pipeline. Fetching all weeks
@@ -134,9 +138,13 @@ rows) and means a later change to the window needs no re-ingest.
 > duration buckets of a single week. Same trap as
 > `compute_hero_matchup_advantage.py`, different table.
 
-> **Verify:** 33,516 rows. Anti-Mage's curve rises (bucket 2: 45.4% → bucket
-> 12: 52.0%), Pudge's and Rubick's fall. `stratz_hero_win_week` row count
-> unchanged at 2,540.
+> **Verify — done 2026-08-24, all passing:** 33,782 rows, 127 × 19 × 14, grid
+> density min = max = 14. Anti-Mage rises (bucket 2: 45.4% → 12: 52.0%),
+> Pudge falls (54.3% → 49.2%), Rubick falls (53.7% → 48.2%) — matching the API
+> probe exactly, so the DB round-trip is lossless. `stratz_hero_win_week`
+> unchanged at 2,540 and `hero_matchup_advantage` unchanged at 14,868.
+> The landmine was also confirmed empirically: `ROW_NUMBER() <= 2` on the new
+> table keeps 2 rows spanning 1 week and 2 buckets, exactly as warned.
 
 **A2.** Pin the bucket→minute mapping empirically (cross-check bucket counts
 against `heroStats.stats` with `minTime`/`maxTime`), then document it in
@@ -236,8 +244,8 @@ costs one evening to find out instead of six.
 | Step | Who | Work |
 |---|---|---|
 | E1 `hero_lane_dist` | me | 1 call (`stats(groupByPosition:true)`) → `predicted_lane`. Source decided: empirical positions only, `hero_role.csv` is not consulted |
-| E2 `hero_threat_timing` | me | 126 calls to `itemFullPurchase`, real medians → `enemy_clocks` |
-| E3 `hero_tags.csv` | **you** | 126 heroes × 10 booleans (lockdown, save, dispel, waveclear, tower_dmg, silence, break, cheap_ult, illusion, summons). I generate the skeleton with hero names pre-filled; you fill the values |
+| E2 `hero_threat_timing` | me | 127 calls to `itemFullPurchase`, real medians → `enemy_clocks` |
+| E3 `hero_tags.csv` | **you** | 127 heroes × 10 booleans (lockdown, save, dispel, waveclear, tower_dmg, silence, break, cheap_ult, illusion, summons). I generate the skeleton with hero names pre-filled; you fill the values |
 | E4 loader + fold in | me | `load_hero_tags.py` mirroring `load_heroes_roles.py`, then extend `build_context` + tests |
 
 E3 stays hand-authored deliberately — the original doc is right that a derived

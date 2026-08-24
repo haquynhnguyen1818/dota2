@@ -176,6 +176,7 @@ is confirmed working in production.
 - `load_stratz_matchups.py` — Stratz `matchUp`, summed over the latest 2 weeks (see gotcha below) → `stratz_hero_matchups`.
 - `load_heroes_roles.py` — loads `data/hero_role.csv` (hero → Carry/Midlane/Offlane/Supports, hand-curated by the user) → `roles_csv_import`, `hero_roles_csv_import`.
 - `load_stratz_synergy.py` — Phase 2 step 1. Stratz `matchUp`'s `with` field (duo win rates, heroes on the same team), summed over the latest 2 weeks like `load_stratz_matchups.py` → `stratz_hero_synergy` (`hero_id`, `with_hero_id`, `games_played`, `wins`, `synergy`; directed pair, PK on both columns). 16,002 rows = full 127×126 directed matrix. `synergy` is Stratz's own precomputed TrueSynergy offset (per user request), games-played-weighted across the 2 weeks since it's a per-week ratio, not a raw count — can't just be summed like `games_played`/`wins`.
+- `load_stratz_hero_duration.py` — Post-draft coach, Phase A1 (see `coaching_plan.md`). Stratz `winWeek` with `groupBy: HERO_ID_DURATION_MINUTES` → `stratz_hero_duration_wr` (`hero_id`, `week`, `duration_bucket`, `games_played`, `wins`; PK on the first three). 33,782 rows = 127 heroes × 19 weeks × 14 buckets, a perfectly dense grid. One API call — `take` counts *weeks*, not rows. **`duration_bucket` is Stratz's `durationMinute`, a bucket index (0-14), not a minute value** — renamed on the way in so it can't be misread; buckets are ~5 min wide. All weeks are stored raw; consumers roll up to the latest 2 at query time. **Deliberately a separate table from `stratz_hero_win_week`** rather than filling in that table's unused all-zeros `duration_minute` column — see the gotcha below.
 - `load_players.py` — Phase 2 step 3. Parses the hand-curated `docs/players_id.txt` (`Name: account_id. Profile status: public|private.`) → `players` (all players, public and private). For players marked public only, fetches OpenDota `/players/{account_id}/heroes` → `player_hero_stats` (per-hero `games_played`/`wins`/`with_*`/`against_*`/`last_played`, zero-game rows skipped). Private profiles are recorded in `players` (so they're known) but no history is fetched for them — OpenDota returns all-zero data for private profiles anyway, and it'd just be wasted API calls. Stratz is *not* used for player history — see gotcha below.
 
 **Engine** (`src/app/engine/`):
@@ -209,6 +210,24 @@ import ...` resolves from any CWD.
   and `hero_wr` cover the same window. If `hero_wr`'s window changes again
   (e.g. "latest 3 weeks"), `load_stratz_matchups.py` must change to match,
   or the advantage numbers will look subtly wrong again.
+- **Rolling up "latest 2 weeks" — `ROW_NUMBER` vs `DENSE_RANK` depends on the
+  table's shape.** `compute_hero_matchup_advantage.py` uses `ROW_NUMBER() OVER
+  (PARTITION BY hero_id ORDER BY week DESC) <= 2` on `stratz_hero_win_week`.
+  That is correct *only* because that table has exactly one row per hero-week
+  (2,540 rows = 127 heroes × 20 weeks). `stratz_hero_duration_wr` has **14**
+  rows per hero-week, so the same pattern there keeps 2 rows spanning a single
+  week and 2 duration buckets — confirmed empirically, not theoretical. Any
+  rollup on the duration table must use `DENSE_RANK() OVER (ORDER BY week DESC)
+  <= 2` or an explicit `week IN (...)`. This is also why duration data went
+  into its own table instead of filling in `stratz_hero_win_week`'s unused
+  `duration_minute` column: doing that would have silently turned the existing
+  `ROW_NUMBER` into a bucket-slicer and corrupted `hero_wr` → `xwr_a_b` →
+  `advantage`, i.e. all of Objective 1 and 2, with no error anywhere.
+- **Hero rosters: read ids from the DB, never a hardcoded range.** A planning
+  probe using `range(1, 150)` silently missed Largo (id 155) and undercounted
+  by one hero's entire grid. `stratz_heroes` has 127 rows with ids up to 155.
+- **`take` on Stratz's `winWeek` counts weeks, not rows.** `take: 2000` returns
+  every retained week for every hero id passed, not 2000 rows.
 - **`xWr_a_b`** is the log5 formula: `hero_wr*(1-vs_hero_wr) /
   (hero_wr*(1-vs_hero_wr) + (1-hero_wr)*vs_hero_wr)` — isolates matchup edge
   from general hero strength.
