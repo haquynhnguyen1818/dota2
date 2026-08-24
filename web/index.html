@@ -89,6 +89,42 @@
     </div>
   </div>
 
+  <!-- Post-draft coach -->
+  <div class="card" id="coachCard">
+    <p class="eyebrow">Post-draft coach</p>
+    <div class="add-row" id="coachControls" style="display:none;">
+      <div class="select-wrap">
+        <div class="combo" id="coachHeroCombo">
+          <div class="combo-trigger" id="coachHeroTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Select which hero you are playing">
+            <span class="combo-value placeholder" id="coachHeroValue">Select your hero…</span>
+            <span class="combo-icons">
+              <button class="combo-clear" id="coachHeroClear" aria-label="Clear selection" type="button">×</button>
+              <span class="combo-chevron"></span>
+            </span>
+          </div>
+          <div class="combo-panel" id="coachHeroPanel" role="listbox">
+            <div class="combo-list" id="coachHeroList"></div>
+          </div>
+        </div>
+      </div>
+      <div class="select-wrap">
+        <div class="combo" id="coachRoleCombo">
+          <div class="combo-trigger" id="coachRoleTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Select your role">
+            <span class="combo-value placeholder" id="coachRoleValue">Select role…</span>
+            <span class="combo-icons">
+              <button class="combo-clear" id="coachRoleClear" aria-label="Clear role" type="button">×</button>
+              <span class="combo-chevron"></span>
+            </span>
+          </div>
+          <div class="combo-panel" id="coachRolePanel" role="listbox">
+            <div class="combo-list" id="coachRoleList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="coachBody"></div>
+  </div>
+
   <!-- Role tabs -->
   <div class="tabs" id="tabs" role="tablist" aria-label="Role">
     <button class="tab active" data-role="Carry" role="tab" aria-selected="true">Carry</button>
@@ -132,6 +168,7 @@
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script src="js/combo.js"></script>
+<script src="js/coach.js"></script>
 <script src="js/draft.js"></script>
 </body>
 </html>

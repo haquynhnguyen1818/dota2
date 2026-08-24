@@ -154,6 +154,7 @@ function syncPlayerValue() {
 }
 
 async function refreshSuggestions() {
+  refreshCoach(); // every pick mutation routes through here; coach.js guards its own staleness
   state.expanded = {};
   state.showAllBest = {};
   const seq = ++requestSeq;
@@ -395,6 +396,9 @@ async function init() {
     state.showAllBest[state.currentRole] = !(state.showAllBest[state.currentRole] ?? false);
     renderLists();
   });
+
+  setupCoach();
+  refreshCoach();
 }
 
 init();

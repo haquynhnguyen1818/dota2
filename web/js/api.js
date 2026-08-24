@@ -33,3 +33,12 @@ function getDraftSuggestions(opponentPicks, allyPicks, playerAccountId) {
     player_account_id: playerAccountId,
   });
 }
+
+function getDraftAnalysis(myHeroId, myRole, allyPicks, enemyPicks) {
+  return apiPost("/draft-analysis", {
+    my_hero_id: myHeroId,
+    my_role: myRole,
+    ally_picks: allyPicks,
+    enemy_picks: enemyPicks,
+  });
+}

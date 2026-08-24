@@ -134,6 +134,21 @@ before deploying. Two pages, dark "Draft Terminal" theme matching
   from `player_history`; clearing the player removes it. Purely additive to
   the row — matches the "annotate only" decision from step 4, doesn't touch
   ranking or bar width.
+- `js/coach.js` — **Post-draft coach panel** (Phase C, see `coaching_plan.md`).
+  A card on `index.html` between the player-history selector and the role tabs.
+  Locked until **both** chip lists hold 5, showing a countdown of what's still
+  missing; at 5v5 it reveals a "which one is me" combo (options are the ally
+  picks only) plus a role combo, and draws the power curve. "Me" defaults to
+  the first ally so the curve is on screen without a click — safe because
+  `my_hero_id` doesn't affect the curve in v1, it's only carried through for
+  the later LLM phase. Chart is hand-rolled inline SVG, no library.
+  **The y-axis fits the data with a 2pp floor** (`MIN_SPAN`): averaging five
+  heroes pulls hard toward 50%, so real deltas are often under 2pp and a
+  0-100% axis would draw every draft as two flat lines. 50% is always kept in
+  frame as the reference. Has its own stale-response guard (`coachSeq`), same
+  reason as `draft.js`'s. `draft.js` touches this in exactly two places:
+  `refreshCoach()` at the top of `refreshSuggestions()` (every pick mutation
+  routes through there) and `setupCoach()` in `init()`.
 - `js/combo.js` — the searchable-combobox widget (`setupCombo()`) shared by
   both pages; `options` can be a static array or a callback (draft.js uses a
   callback so the hero-picker's option list stays live-filtered against
