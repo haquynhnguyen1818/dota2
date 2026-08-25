@@ -299,6 +299,40 @@ hero has at least one. Where a tag is arguable, prefer marking it only when the
 hero is *known* for that thing — the point is to separate lineups that clearly
 have a capability from ones that clearly don't.
 
+### What was auto-filled, and how far to trust it
+
+The CSV was bootstrapped from API data before the manual pass. **A `1` means a
+source positively asserted the tag; a blank means "not detected", which is
+NOT the same as "no".** No column is complete — every source here has good
+precision and poor recall, so the blanks are the work, not the 1s.
+
+| Column | Filled | Source | Trust |
+|---|---|---|---|
+| `tower_dmg` | 29 | OpenDota `Pusher` role | **Good** — reads like a real pusher list |
+| `lockdown` | 64 | Stratz modifier flags (`isStun`/`isHex`/`isRoot`/`isShackle`/`isSleep`/`isCyclone`/`isTaunt`) | **Partial** — misses Sven's Storm Hammer |
+| `summons` | 8 | Ability-name match | **Partial** — misses Enigma, Shadow Shaman, Venomancer |
+| `silence` | 12 | Stratz modifier flags (`isSilence`/`isMute`) | **Weak** — misses Death Prophet |
+| `illusion` | 2 | Ability-name match | **Near-useless** — misses Phantom Lancer, Chaos Knight |
+| `break` | 1 | Stratz `isBreak` | **Near-useless** — only Hoodwink; misses Viper, Slark, Doom, Spirit Breaker |
+| `save`, `dispel`, `waveclear`, `cheap_ult` | 0 | — | Untouched, all judgement |
+
+Why the gaps, so nobody retries these dead ends:
+
+- **Stratz's modifier flags are sparsely populated.** `isBreak` matches exactly
+  one modifier in the whole 3,304-row constant set. The flags that do fire are
+  reliable — no false positives found in spot checks — but absence proves
+  nothing.
+- **OpenDota's `Disabler` role was rejected for `lockdown`.** It covers 95 of
+  127 heroes, including slow-only heroes like Viper and Slark, which this tag
+  set explicitly excludes. `Pusher` is much tighter and was used.
+- **`cheap_ult` is not derivable.** Stratz's `isUltimate` is `false` on all
+  2,978 abilities in the constants, and `cooldown` is null for many (Sven's
+  God's Strength, Earthshaker's Echo Slam), so neither "which ability is the
+  ult" nor "how often is it up" can be read from the API.
+- **Ability-name matching is weak for `illusion`/`summons`** because Dota
+  ability names follow no convention — `demonic_conversion`, `juxtapose` and
+  `spawn_spiderlings` all mean "summon or illusion" without saying so.
+
 ## Phase F — Patch blob · ~½ evening
 
 Source: **https://www.dota2.com/patches**. Still worth doing for the LLM
