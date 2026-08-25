@@ -8,6 +8,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "streamlit",
+    "anthropic",
 ]
 
 [project.optional-dependencies]

@@ -18,6 +18,11 @@ try:
 except ImportError:  # the production image ships no config.py
     creds_opendota = {}
 
+try:
+    from app.config import coach_pin as _cfg_coach_pin
+except ImportError:  # not set locally, or no config.py at all
+    _cfg_coach_pin = ""
+
 
 def db_kwargs() -> dict[str, str]:
     """Keyword arguments for `psycopg.connect()`."""
@@ -63,3 +68,14 @@ def stratz_headers() -> dict[str, str]:
             "python -m app.ingestion.<loader>"
         )
     return {"Authorization": f"Bearer {token}", "User-Agent": "STRATZ_API"}
+
+
+def coach_pin() -> str:
+    """The master PIN that unlocks extra `/coach` calls once the rate limit hits.
+
+    Same env-first-then-config.py resolution as the database -- unlike Stratz,
+    there's no IP binding here, so testing the unlock flow locally is fine.
+    Empty string means "not configured", which the caller must reject rather
+    than let an unset PIN match an empty submitted PIN.
+    """
+    return os.environ.get("COACH_PIN", _cfg_coach_pin)

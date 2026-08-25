@@ -29,6 +29,9 @@ services:
       # Unused by the API itself; needed by `docker compose run api
       # python -m app.jobs.refresh_weekly`, which reuses this service.
       STRATZ_TOKEN: ${STRATZ_TOKEN}
+      # /coach (Phase G) is used by the API itself, unlike STRATZ_TOKEN above.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      COACH_PIN: ${COACH_PIN}
     ports:
       - "8000:8000"
 

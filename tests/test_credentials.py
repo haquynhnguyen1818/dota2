@@ -8,7 +8,7 @@ weekly refresh job at the developer's machine.
 import pytest
 
 from app import credentials
-from app.credentials import db_kwargs, stratz_headers
+from app.credentials import coach_pin, db_kwargs, stratz_headers
 
 DB_VARS = ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_SSLMODE")
 
@@ -21,7 +21,7 @@ CONFIG = {
 @pytest.fixture
 def no_env(monkeypatch):
     """A clean environment, so config.py is the only source."""
-    for var in (*DB_VARS, "STRATZ_TOKEN"):
+    for var in (*DB_VARS, "STRATZ_TOKEN", "COACH_PIN"):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -113,3 +113,32 @@ def test_an_empty_stratz_token_raises(from_config, monkeypatch):
 def test_missing_stratz_token_names_the_way_out(no_config, no_env):
     with pytest.raises(RuntimeError, match="docker compose"):
         stratz_headers()
+
+
+# --------------------------------------------------------------------------
+# Coach PIN
+# --------------------------------------------------------------------------
+
+def test_coach_pin_comes_from_the_environment(no_env, monkeypatch):
+    monkeypatch.setenv("COACH_PIN", "1234")
+    assert coach_pin() == "1234"
+
+
+def test_coach_pin_falls_back_to_config(no_env, monkeypatch):
+    # Unlike Stratz, the PIN has no IP-binding hazard, so config.py works here
+    # the same way it does for the database.
+    monkeypatch.setattr(credentials, "_cfg_coach_pin", "cfg-pin")
+    assert coach_pin() == "cfg-pin"
+
+
+def test_coach_pin_environment_wins_over_config(no_env, monkeypatch):
+    monkeypatch.setattr(credentials, "_cfg_coach_pin", "cfg-pin")
+    monkeypatch.setenv("COACH_PIN", "env-pin")
+    assert coach_pin() == "env-pin"
+
+
+def test_missing_coach_pin_is_an_empty_string_not_an_error(no_env, monkeypatch):
+    # The router, not this module, decides an unconfigured PIN is fatal --
+    # coach_pin() just reports what it found.
+    monkeypatch.setattr(credentials, "_cfg_coach_pin", "")
+    assert coach_pin() == ""

@@ -477,6 +477,8 @@ a bug and no re-run improves it.
 
 ## Phase G — LLM synthesis · ~2 evenings
 
+NOTE: BEFORE STARTING THIS PHASE G, tell me what inputs you take, what you intend to do and what the output will be. I do not think the patch blob is helpful. What do you expect out of the patch blob?
+
 - **you:** pick provider/model, confirm the spend.
 - **me:** one call — context JSON + patch blob + strict output schema. Central
   prohibition: *every number in the output must come from the supplied context;
@@ -512,10 +514,8 @@ Default view is four lines — `frame` / `lane` / `clock` / `wincon` — targeti
 **under 90 seconds of reading**. `detail` lives behind an expand, the same
 glanceable-then-drill pattern as the existing bar rows.
 
-**Fire the call automatically when the 10th hero is picked, not on a button**,
-so it has already resolved by the time you look at it. This is why the cache in
-Phase G matters: an auto-fire on every completed draft is only affordable if
-repeat drafts are free.
+**Create a button to click if the user wants the guide**,
+The cache in Phase G should still be useful as the repeat drafts are free.
 
 ---
 
