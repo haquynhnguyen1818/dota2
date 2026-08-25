@@ -9,6 +9,15 @@ team's five heroes' individual win rates at a given game length; hero
 interaction effects are not in it at all (those live in `stratz_hero_matchups`
 and `stratz_hero_synergy`). Label it "power curve" in any UI, never "win
 chance".
+
+Note these win rates come from the `winWeek` population (via
+`stratz_hero_duration_wr`), which is **not** the population behind `hero_wr` in
+`/draft-suggestions` — that one is `stratz_hero_matchups`, an
+interaction-filtered subset (see `01529a2`). The same hero can therefore read
+slightly differently in the two panels; for flex/summon heroes the gap reaches
+~4pp. That is expected. `winWeek` is the only source of duration data and is
+also the right population for a duration question, being a uniform slice of
+all games — pooled across heroes, every bucket sits at exactly 50%.
 """
 from dataclasses import dataclass
 

@@ -224,18 +224,42 @@ import ...` resolves from any CWD.
 
 ## Key decisions & gotchas (don't rediscover these the hard way)
 
-- **`hero_wr`/`vs_hero_wr` = latest 2 weeks only**, not lifetime, not a
-  single week. Summed `wins`/`games_played` from `stratz_hero_win_week`'s
-  two most recent `week` buckets. Chosen over lifetime because the user
-  wants current-meta win rates, not a season average.
+- **`hero_wr`/`vs_hero_wr` come from `stratz_hero_matchups`, not
+  `stratz_hero_win_week`** — changed in `01529a2`. Each hero's baseline is its
+  games-played-weighted win rate across all of its matchup rows, i.e. the
+  *same population* as `wr_a_b`. That is the whole point: log5 only isolates a
+  real matchup-specific residual when its baseline is computed on the same
+  population as the number it's subtracted from. Stratz's `matchUp` samples a
+  "significant interaction" subset rather than a uniform slice of every match
+  (per-hero totals measured at 0.89-2.11x `winWeek`'s), so using `winWeek`'s
+  blanket win rate as the baseline handed flex/summon heroes a systematic edge
+  against nearly every opponent — Meepo, Visage and Arc Warden run +4.40,
+  +4.34 and +3.75 percentage points higher in the matchUp population than in
+  winWeek's. A useful side effect: because both sides of the subtraction now
+  come from one table, they are automatically on the same time basis, so the
+  old "keep the two windows in sync" hazard is gone.
 - **`wr_a_b` must be on the same time basis as `hero_wr`.** Stratz's
   `matchUp` query with no `week` arg silently returns only the *single*
   latest week (not lifetime, as originally assumed) — confirmed by GraphQL
   introspection and comparing raw counts. `load_stratz_matchups.py` now
-  explicitly fetches `week=<2 latest buckets>` and sums them, so `wr_a_b`
-  and `hero_wr` cover the same window. If `hero_wr`'s window changes again
-  (e.g. "latest 3 weeks"), `load_stratz_matchups.py` must change to match,
-  or the advantage numbers will look subtly wrong again.
+  explicitly fetches `week=<2 latest buckets>` and sums them. That still
+  governs what lands in `stratz_hero_matchups` and so still defines the
+  advantage window. (The clause that used to live here — "keep this in sync
+  with `hero_wr`'s window or the numbers go subtly wrong" — no longer applies
+  since `01529a2`: `hero_wr` is now derived from this same table, so the two
+  cannot drift apart.)
+- **Two different populations are now displayed on the same page — this is
+  expected, not a bug.** `hero_wr` in `/draft-suggestions` rows comes from the
+  `matchUp` population; the coach's power curve comes from the `winWeek`
+  population, because `winWeek` is the only place duration data exists. For
+  most heroes they agree closely (median gap 0.65pp, p90 1.73pp) but for
+  flex/summon heroes they diverge by up to 4.4pp, so the same hero can show
+  slightly different win rates in the two panels. **Don't "fix" this by moving
+  the curve onto matchUp data** — there is no matchUp-by-duration breakdown,
+  and `winWeek` is the correct population for a duration question anyway,
+  being a uniform slice of all games. Verified centred: pooled across all
+  heroes, every duration bucket 3-13 sits at exactly 50.00%, so curve deltas
+  are pure relative signal with no per-bucket baseline drift.
 - **Duration buckets are 5 minutes wide: bucket `b` = minutes `[5b, 5b+5)`,
   bucket 14 = 70+.** Established structurally, not by direct measurement.
   Stratz's per-minute data caps at 75 min (`stats` with `minTime:60,
