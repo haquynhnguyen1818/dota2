@@ -543,6 +543,31 @@ footer{
 .role-pill.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
 .role-pill:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 
+/* ---------- Coach: language toggle (Phase H) ---------- */
+.coach-plan-controls{display:flex;justify-content:flex-end;margin-bottom:10px;}
+.lang-toggle{
+  display:inline-flex;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:999px;
+  padding:3px;
+  gap:2px;
+}
+.lang-pill{
+  all:unset;
+  font-family:var(--font-mono);
+  font-size:12px;
+  font-weight:600;
+  padding:7px 14px;
+  border-radius:999px;
+  color:var(--text-secondary);
+  cursor:pointer;
+  transition:all 0.15s ease;
+}
+.lang-pill:hover{color:var(--text-primary);}
+.lang-pill.active{background:var(--accent-soft);color:var(--accent);}
+.lang-pill:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
 /* ---------- Coach: LLM game plan (Phase H) ---------- */
 .plan-btn{margin-top:12px;}
 .coach-plan{margin-top:16px;padding-top:16px;border-top:1px solid var(--border-soft);}

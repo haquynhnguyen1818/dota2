@@ -11,6 +11,17 @@
 // than this, or noise looks like signal.
 const MIN_SPAN = 0.02;
 
+// Remembered per-browser so switching to Vietnamese sticks across visits.
+// localStorage can throw in a locked-down browser, so failure just falls
+// back to English rather than breaking the page.
+function loadStoredLanguage() {
+  try {
+    return localStorage.getItem("coachLanguage") === "vi" ? "vi" : "en";
+  } catch (_) {
+    return "en";
+  }
+}
+
 const coachState = {
   myHeroName: null,
   // Read by the power curve request too (harmlessly -- it ignores role), but
@@ -30,6 +41,8 @@ const coachState = {
   rateLimited: null, // {calls_used, limit} from a 429, or null
   unlockError: null,
   unlockLoading: false,
+  // The guide's output language. Doesn't affect the curve at all, only /coach.
+  language: loadStoredLanguage(),
 };
 
 let coachSeq = 0;
@@ -266,7 +279,9 @@ async function requestCoachPlan() {
   renderCoachPlan();
 
   try {
-    const result = await getCoachPlan(myHeroId, coachState.myRole, state.allyPicks, state.opponentPicks);
+    const result = await getCoachPlan(
+      myHeroId, coachState.myRole, state.allyPicks, state.opponentPicks, coachState.language
+    );
     if (seq !== planSeq) return; // superseded by a pick/role change since this fired
 
     if (result.ok) {
@@ -316,10 +331,13 @@ async function requestUnlock() {
 
 function renderCoachPlan() {
   const el = document.getElementById("coachPlanBody");
+  const controls = document.getElementById("coachPlanControls");
   if (!coachIsReady()) {
+    controls.style.display = "none";
     el.innerHTML = "";
     return;
   }
+  controls.style.display = "flex";
 
   if (coachState.rateLimited) {
     const rl = coachState.rateLimited;
@@ -446,10 +464,34 @@ function setupCoachRoleTabs() {
   });
 }
 
+function syncCoachLanguageUI() {
+  document.querySelectorAll("#coachLangToggle .lang-pill").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.lang === coachState.language);
+  });
+}
+
+function setupCoachLanguageToggle() {
+  document.getElementById("coachLangToggle").addEventListener("click", (e) => {
+    const btn = e.target.closest(".lang-pill");
+    if (!btn || btn.dataset.lang === coachState.language) return;
+    coachState.language = btn.dataset.lang;
+    try {
+      localStorage.setItem("coachLanguage", coachState.language);
+    } catch (_) {
+      // storage unavailable -- the choice just won't persist across visits
+    }
+    syncCoachLanguageUI();
+    resetCoachPlan(); // the previous guide, if any, was written in the other language
+    renderCoachPlan();
+  });
+}
+
 function setupCoach() {
   syncCoachHeroValue();
   syncCoachRoleUI();
   setupCoachRoleTabs();
+  syncCoachLanguageUI();
+  setupCoachLanguageToggle();
 
   setupCombo({
     comboId: "coachHeroCombo",

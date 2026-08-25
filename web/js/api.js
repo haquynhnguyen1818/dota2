@@ -60,12 +60,13 @@ async function apiPostResult(path, body) {
   return { ok: res.ok, status: res.status, data };
 }
 
-function getCoachPlan(myHeroId, myRole, allyPicks, enemyPicks) {
+function getCoachPlan(myHeroId, myRole, allyPicks, enemyPicks, language) {
   return apiPostResult("/coach", {
     my_hero_id: myHeroId,
     my_role: myRole,
     ally_picks: allyPicks,
     enemy_picks: enemyPicks,
+    language: language,
   });
 }
 

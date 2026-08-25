@@ -16,6 +16,7 @@ from app.api.db import get_conn
 from app.api.schemas.coach import CoachPlanRequest, CoachPlanResponse, RateLimitStatus, UnlockRequest
 from app.credentials import coach_pin
 from app.engine.coach import (
+    LANGUAGES,
     RATE_WINDOW_MINUTES,
     build_prompt,
     cache_key,
@@ -70,13 +71,17 @@ def get_coach_plan(
         raise HTTPException(status_code=400, detail="my_hero_id must be one of ally_picks")
     if request.my_role is not None and request.my_role not in ROLES:
         raise HTTPException(status_code=400, detail=f"my_role must be one of {sorted(ROLES)}")
+    if request.language not in LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"language must be one of {sorted(LANGUAGES)}")
 
     names = _load_hero_names(conn)
     unknown = [h for h in request.ally_picks + request.enemy_picks if h not in names]
     if unknown:
         raise HTTPException(status_code=404, detail=f"Unknown hero id(s): {unknown}")
 
-    key = cache_key(request.my_hero_id, request.my_role, request.ally_picks, request.enemy_picks)
+    key = cache_key(
+        request.my_hero_id, request.my_role, request.ally_picks, request.enemy_picks, request.language
+    )
     plan = load_cached_plan(conn, key)
     cached = plan is not None
     if plan is None:
@@ -102,7 +107,7 @@ def get_coach_plan(
             request.my_hero_id, request.my_role, request.ally_picks, request.enemy_picks, data
         )
         prompt = build_prompt(context, names, request.ally_picks, request.enemy_picks)
-        plan = generate_plan(client, prompt)
+        plan = generate_plan(client, prompt, request.language)
         record_call(conn)
         store_plan(conn, key, plan)
 

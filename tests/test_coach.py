@@ -7,6 +7,7 @@ without a real API call.
 from types import SimpleNamespace
 
 from app.engine.coach import (
+    LANGUAGE_DIRECTIVES,
     RATE_LIMIT,
     UNLOCK_BONUS,
     CoachPlan,
@@ -58,6 +59,20 @@ def test_cache_key_differs_on_role():
     a = cache_key(MY_HERO, "Carry", ALLIES, ENEMIES)
     b = cache_key(MY_HERO, "Midlane", ALLIES, ENEMIES)
     assert a != b
+
+
+def test_cache_key_differs_on_language():
+    # An English and a Vietnamese plan for the same draft are different text --
+    # they must never share a cache row.
+    a = cache_key(MY_HERO, "Carry", ALLIES, ENEMIES, language="en")
+    b = cache_key(MY_HERO, "Carry", ALLIES, ENEMIES, language="vi")
+    assert a != b
+
+
+def test_cache_key_defaults_to_english():
+    a = cache_key(MY_HERO, "Carry", ALLIES, ENEMIES)
+    b = cache_key(MY_HERO, "Carry", ALLIES, ENEMIES, language="en")
+    assert a == b
 
 
 def test_cache_key_differs_on_my_hero():
@@ -121,6 +136,20 @@ def test_generate_plan_requests_structured_output():
     kwargs = client.messages.received_kwargs
     assert kwargs["output_format"] is CoachPlan
     assert kwargs["messages"] == [{"role": "user", "content": "context json here"}]
+
+
+def test_generate_plan_defaults_to_the_english_directive():
+    client = _StubClient(PLAN)
+    generate_plan(client, "context json here")
+    assert LANGUAGE_DIRECTIVES["en"] in client.messages.received_kwargs["system"]
+
+
+def test_generate_plan_switches_the_language_directive():
+    client = _StubClient(PLAN)
+    generate_plan(client, "context json here", language="vi")
+    system = client.messages.received_kwargs["system"]
+    assert LANGUAGE_DIRECTIVES["vi"] in system
+    assert LANGUAGE_DIRECTIVES["en"] not in system
 
 
 # --------------------------------------------------------------------------

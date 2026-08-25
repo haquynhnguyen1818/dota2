@@ -107,7 +107,8 @@
           </div>
         </div>
       </div>
-      <div class="role-pills" id="coachRoleTabs" aria-label="Your role (optional)">
+      <div class="role-pills" id="coachRoleTabs" aria-label="Your role (optional)"
+           title="Optional: which role you're playing this hero as. The guide below tailors its lane/item advice to it — a flex hero like Crystal Maiden gets different advice as Support than as Offlane.">
         <button type="button" class="role-pill" data-role="Carry">Carry</button>
         <button type="button" class="role-pill" data-role="Midlane">Mid</button>
         <button type="button" class="role-pill" data-role="Offlane">Offlane</button>
@@ -115,6 +116,12 @@
       </div>
     </div>
     <div id="coachBody"></div>
+    <div class="coach-plan-controls" id="coachPlanControls" style="display:none;">
+      <div class="lang-toggle" id="coachLangToggle" aria-label="Coach guide language">
+        <button type="button" class="lang-pill active" data-lang="en">EN</button>
+        <button type="button" class="lang-pill" data-lang="vi">VI</button>
+      </div>
+    </div>
     <div id="coachPlanBody"></div>
   </div>
 

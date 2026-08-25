@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.engine.coach import CoachPlan
+from app.engine.coach import DEFAULT_LANGUAGE, CoachPlan
 
 
 class CoachPlanRequest(BaseModel):
@@ -8,6 +8,7 @@ class CoachPlanRequest(BaseModel):
     my_role: str | None = None
     ally_picks: list[int]
     enemy_picks: list[int]
+    language: str = DEFAULT_LANGUAGE
 
 
 class CoachPlanResponse(CoachPlan):

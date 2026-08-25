@@ -24,7 +24,23 @@ from psycopg.types.json import Jsonb
 from app.engine.draft_context import DraftContext, bucket_label
 
 MODEL = "claude-sonnet-5"
-MAX_TOKENS = 2000
+# The JSON output itself is short, but Sonnet 5's adaptive thinking (on by
+# default) draws from this same budget, and non-English prose runs longer per
+# sentence -- 2000 truncated mid-field on a real Vietnamese response and threw
+# a JSON parse error. Generous headroom is a fraction of a cent either way.
+MAX_TOKENS = 4096
+
+DEFAULT_LANGUAGE = "en"
+LANGUAGE_DIRECTIVES = {
+    "en": "Write your entire response in English.",
+    "vi": (
+        "Write your entire response in Vietnamese (Tiếng Việt). Hero, item, and "
+        "ability names may stay in their common English/Dota 2 form, since that's "
+        "how players actually refer to them, but every sentence of advice must be "
+        "in Vietnamese."
+    ),
+}
+LANGUAGES = set(LANGUAGE_DIRECTIVES)
 
 # Rate limit: RATE_LIMIT real Claude calls per RATE_WINDOW_MINUTES, rolling.
 # A correct PIN adds UNLOCK_BONUS more, logged as its own event in the same
@@ -79,23 +95,37 @@ Never call the power curve a "win chance" or "win probability" -- it is a \
 heuristic average of individual hero win rates, not a team win prediction. \
 Call it a "power curve" or describe the trend in words.
 
+Never quote a JSON field name from the context (e.g. `tempo_verdict`, \
+`crossover_point`, `matchup_delta`) in your prose. Those are internal labels, \
+not phrases a player would say -- describe what they mean in plain language \
+instead.
+
 Keep `frame` and `wincon` to one sentence each. Keep every other field to one \
 or two sentences."""
 
 
-def cache_key(my_hero_id: int, my_role: str | None, ally_picks: list[int], enemy_picks: list[int]) -> str:
+def cache_key(
+    my_hero_id: int,
+    my_role: str | None,
+    ally_picks: list[int],
+    enemy_picks: list[int],
+    language: str = DEFAULT_LANGUAGE,
+) -> str:
     """Stable key for repeat views of the same draft.
 
     Sorts each team's own picks separately, not all ten together -- collapsing
     both teams into one sorted set would hash "ally X vs enemy Y" the same as
     "ally Y vs enemy X", which is the opposite matchup with a different frame
-    and wincon.
+    and wincon. `language` is part of the key too -- the plan text itself
+    differs by language, so an English and a Vietnamese request for the same
+    draft must never collide on the same cache row.
     """
     payload = {
         "my_hero_id": my_hero_id,
         "my_role": my_role,
         "ally_picks": sorted(ally_picks),
         "enemy_picks": sorted(enemy_picks),
+        "language": language,
     }
     return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
@@ -120,11 +150,12 @@ def build_prompt(
     return json.dumps(payload, indent=2)
 
 
-def generate_plan(client: anthropic.Anthropic, prompt: str) -> CoachPlan:
+def generate_plan(client: anthropic.Anthropic, prompt: str, language: str = DEFAULT_LANGUAGE) -> CoachPlan:
+    system = f"{SYSTEM_PROMPT}\n\n{LANGUAGE_DIRECTIVES[language]}"
     response = client.messages.parse(
         model=MODEL,
         max_tokens=MAX_TOKENS,
-        system=SYSTEM_PROMPT,
+        system=system,
         messages=[{"role": "user", "content": prompt}],
         output_format=CoachPlan,
     )
