@@ -256,18 +256,22 @@ import ...` resolves from any CWD.
   catch-all/unknown bucket rather than a literal 0-5 min bin, so don't label
   it as minutes or lean on it. Bucket 14 (70+) is a 0.12% tail.
 - **Rolling up "latest 2 weeks" — `ROW_NUMBER` vs `DENSE_RANK` depends on the
-  table's shape.** `compute_hero_matchup_advantage.py` uses `ROW_NUMBER() OVER
-  (PARTITION BY hero_id ORDER BY week DESC) <= 2` on `stratz_hero_win_week`.
-  That is correct *only* because that table has exactly one row per hero-week
-  (2,540 rows = 127 heroes × 20 weeks). `stratz_hero_duration_wr` has **14**
-  rows per hero-week, so the same pattern there keeps 2 rows spanning a single
-  week and 2 duration buckets — confirmed empirically, not theoretical. Any
-  rollup on the duration table must use `DENSE_RANK() OVER (ORDER BY week DESC)
-  <= 2` or an explicit `week IN (...)`. This is also why duration data went
-  into its own table instead of filling in `stratz_hero_win_week`'s unused
-  `duration_minute` column: doing that would have silently turned the existing
-  `ROW_NUMBER` into a bucket-slicer and corrupted `hero_wr` → `xwr_a_b` →
-  `advantage`, i.e. all of Objective 1 and 2, with no error anywhere.
+  table's shape.** `stratz_hero_duration_wr` has **14** rows per hero-week
+  (one per duration bucket), so `ROW_NUMBER() OVER (PARTITION BY hero_id ORDER
+  BY week DESC) <= 2` there keeps 2 rows spanning a *single* week and 2
+  duration buckets, not 2 weeks — confirmed empirically, not theoretical. Any
+  rollup on that table must use `DENSE_RANK() OVER (ORDER BY week DESC) <= 2`
+  or an explicit `week IN (...)`; `engine/draft_context.py`'s
+  `load_bucket_stats` is the reference. The rule generalises: `ROW_NUMBER` is
+  only safe on a table with exactly one row per hero-week.
+  *Historical:* `compute_hero_matchup_advantage.py` used to carry this exact
+  `ROW_NUMBER` pattern against `stratz_hero_win_week`, which is why duration
+  data was given its own table rather than filling in that table's unused
+  `duration_minute` column. Commit 01529a2 rebased `hero_wr` onto
+  `stratz_hero_matchups`, so that consumer no longer reads the week table and
+  that specific hazard is gone. The separate table stands on its own merits
+  now — writing bucket rows into `stratz_hero_win_week` would collide bucket 0
+  with the per-week total row on the same PK.
 - **Hero rosters: read ids from the DB, never a hardcoded range.** A planning
   probe using `range(1, 150)` silently missed Largo (id 155) and undercounted
   by one hero's entire grid. `stratz_heroes` has 127 rows with ids up to 155.

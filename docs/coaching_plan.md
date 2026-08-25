@@ -76,23 +76,26 @@ returns 2 weeks for every hero requested. No bug in the existing pipeline.
 
 ## ⚠️ The landmine
 
-**Do not add `groupBy` to the existing `stratz_hero_win_week` load.**
+**Any "latest 2 weeks" rollup on `stratz_hero_duration_wr` must filter on
+*weeks*, not rows.** That table holds 14 rows per hero-week, so
+`ROW_NUMBER() ... <= 2` returns two duration buckets of a single week. Use
+`DENSE_RANK() OVER (ORDER BY week DESC) <= 2`, as
+[draft_context.py](../src/app/engine/draft_context.py)'s `load_bucket_stats`
+does. Confirmed empirically on the real table, not theoretical.
 
-[compute_hero_matchup_advantage.py:29](../src/app/engine/compute_hero_matchup_advantage.py#L29)
-computes `hero_wr` with:
+**Superseded, kept for context.** This warning was originally aimed at
+`compute_hero_matchup_advantage.py`, which computed `hero_wr` with that
+`ROW_NUMBER` pattern against `stratz_hero_win_week` — so writing duration rows
+into that table would have silently corrupted `hero_wr` → `xwr_a_b` →
+`advantage`, i.e. all of Objective 1 and 2. Commit `01529a2` (which landed on
+`main` while Phase A–C was being built) rebased `hero_wr` onto
+`stratz_hero_matchups`, so that consumer no longer reads the week table and
+that specific hazard no longer exists.
 
-```sql
-ROW_NUMBER() OVER (PARTITION BY hero_id ORDER BY week DESC) AS rn ... WHERE rn <= 2
-```
-
-That takes the two most recent **rows**, which is correct only because there is
-exactly one row per hero-week today (verified: 2,540 rows = 127 heroes ×
-20 weeks). Turn on duration grouping and it silently takes two duration buckets
-of a single week instead of two weeks — quietly corrupting `hero_wr` →
-`xwr_a_b` → `advantage`, i.e. the entire shipped Objective 1 and 2 output, with
-no error anywhere.
-
-Duration data goes in its own table. The existing pipeline gets zero edits.
+The separate-table decision still stands on its own: writing bucket rows into
+`stratz_hero_win_week` would collide bucket 0 with the existing per-week total
+row on the same primary key. The existing pipeline still gets zero edits from
+this work.
 
 ---
 

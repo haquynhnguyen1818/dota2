@@ -2,11 +2,17 @@
 
 Backs the post-draft coach's power curve (docs/coaching_plan.md, Phase A1).
 
-Deliberately a separate table from `stratz_hero_win_week` rather than filling
-in that table's unused `duration_minute` column: `compute_hero_matchup_advantage.py`
-picks the latest 2 weeks with `ROW_NUMBER() ... <= 2`, which is only correct
-while there is exactly one row per hero-week. Adding duration rows there would
-silently make it read two duration buckets of a single week instead.
+Deliberately a separate table from `stratz_hero_win_week` rather than filling in
+that table's unused `duration_minute` column. Writing bucket rows there would
+collide bucket 0 with the existing per-week total row (same PK) and leave one
+table meaning two different things.
+
+Historical note: this split was originally motivated by
+`compute_hero_matchup_advantage.py` reading that table with
+`ROW_NUMBER() ... <= 2`, which only works while there is one row per hero-week.
+Commit 01529a2 rebased `hero_wr` onto `stratz_hero_matchups`, so that specific
+hazard is gone — but the equivalent trap now lives on *this* table, which has 14
+rows per hero-week. See `engine/draft_context.py`'s `load_bucket_stats`.
 
 Note `duration_bucket` is Stratz's `durationMinute`, which is a bucket *index*
 (0-14), not a minute value -- renamed here so the column can't be mistaken for
