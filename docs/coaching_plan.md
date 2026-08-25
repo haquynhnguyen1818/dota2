@@ -273,6 +273,32 @@ costs one evening to find out instead of six.
 E3 stays hand-authored deliberately — the original doc is right that a derived
 version would be worse, and `hero_role.csv` is the existing precedent.
 
+### E3 tag definitions
+
+`data/hero_tags.csv` is generated with all 127 heroes in alphabetical order and
+10 empty tag columns. **Put `1` where the tag applies and leave the cell blank
+otherwise** — blank is read as 0, and blank-vs-0 carries no meaning. Judge from
+the hero's own abilities and talents, **not** from items they commonly buy
+(otherwise every hero has `break` via Silver Edge and the column says nothing).
+
+| Tag | Means |
+|---|---|
+| `lockdown` | A reliable targeted disable that stops a fleeing or channelling hero — stun, hex, root, leash. Slows don't count |
+| `save` | Can rescue an ally who would otherwise die: a shield, heal-through-burst, invulnerability, or a reposition |
+| `dispel` | Can remove buffs or debuffs, basic or strong, on allies or enemies |
+| `waveclear` | Can delete a creep wave with one or two casts from roughly level 6 without needing items |
+| `tower_dmg` | Takes buildings unusually fast — high base damage, siege summons, or a building-focused ability |
+| `silence` | Has a silence or mute in the kit |
+| `break` | Has a **native** break, i.e. disables passives without Silver Edge |
+| `cheap_ult` | Ultimate is up for nearly every fight — low cooldown or low mana, no long windows without it |
+| `illusion` | Creates illusions |
+| `summons` | Creates controllable units (not illusions) |
+
+A hero can carry several tags; there's no cap and no requirement that every
+hero has at least one. Where a tag is arguable, prefer marking it only when the
+hero is *known* for that thing — the point is to separate lineups that clearly
+have a capability from ones that clearly don't.
+
 ## Phase F — Patch blob · ~½ evening
 
 Source: **https://www.dota2.com/patches**. Still worth doing for the LLM

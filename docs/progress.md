@@ -210,6 +210,32 @@ is confirmed working in production.
 - `load_heroes_roles.py` — loads `data/hero_role.csv` (hero → Carry/Midlane/Offlane/Supports, hand-curated by the user) → `roles_csv_import`, `hero_roles_csv_import`.
 - `load_stratz_synergy.py` — Phase 2 step 1. Stratz `matchUp`'s `with` field (duo win rates, heroes on the same team), summed over the latest 2 weeks like `load_stratz_matchups.py` → `stratz_hero_synergy` (`hero_id`, `with_hero_id`, `games_played`, `wins`, `synergy`; directed pair, PK on both columns). 16,002 rows = full 127×126 directed matrix. `synergy` is Stratz's own precomputed TrueSynergy offset (per user request), games-played-weighted across the 2 weeks since it's a per-week ratio, not a raw count — can't just be summed like `games_played`/`wins`.
 - `load_stratz_hero_duration.py` — Post-draft coach, Phase A1 (see `coaching_plan.md`). Stratz `winWeek` with `groupBy: HERO_ID_DURATION_MINUTES` → `stratz_hero_duration_wr` (`hero_id`, `week`, `duration_bucket`, `games_played`, `wins`; PK on the first three). 33,782 rows = 127 heroes × 19 weeks × 14 buckets, a perfectly dense grid. One API call — `take` counts *weeks*, not rows. **`duration_bucket` is Stratz's `durationMinute`, a bucket index (0-14), not a minute value** — renamed on the way in so it can't be misread; buckets are ~5 min wide. All weeks are stored raw; consumers roll up to the latest 2 at query time. **Deliberately a separate table from `stratz_hero_win_week`** rather than filling in that table's unused all-zeros `duration_minute` column — see the gotcha below.
+- `load_stratz_hero_positions.py` — Post-draft coach, Phase E1. Stratz
+  `heroStats.stats(groupByPosition: true)` → `stratz_hero_positions`
+  (`hero_id`, `week`, `position`, `games_played`, `wins`; PK on the first
+  three). 1,270 rows = 127 heroes × 2 weeks × 5 positions, dense. 1 call per
+  week. **This is the coach's only position source** — `hero_role.csv` stays
+  scoped to the pick-suggester (user decision). Sanity-checked: Anti-Mage 92%
+  POSITION_1, Crystal Maiden 71% POSITION_5, Invoker 70% POSITION_2, with
+  Pudge and Earthshaker correctly reading as flexible (~34% top position).
+  ⚠️ **`stats` is a parsed-match subset** (~31% of `winWeek`'s volume — positions
+  can only be inferred from a parsed match), so its absolute counts are not
+  comparable with `stratz_hero_win_week`/`stratz_hero_duration_wr`. Fine for a
+  *distribution* question. Also note `stats` echoes `week` as a week **index**
+  (2954) while every other table uses Stratz's Unix timestamp (1786579200 =
+  604800 × 2954, the same week) — the loader stores the requested timestamp so
+  this table joins cleanly with the rest.
+- `load_stratz_item_timings.py` — Post-draft coach, Phase E2. Stratz
+  `constants.items` → `stratz_items` (id/short_name/display_name), and
+  `heroStats.itemFullPurchase` → `stratz_hero_item_purchase` (`hero_id`,
+  `week`, `item_id`, `minute`, `games_played`, `wins`; PK on the first four).
+  Stores the **raw per-minute distribution**, not a precomputed median, so
+  p25/p75 or win-rate-weighted timings stay available without a re-fetch.
+  `heroId` is singular on this endpoint → 1 call per hero per week, 254 total,
+  throttled at 0.3s to stay inside Stratz's 250/min. ⚠️ The item list includes
+  **build-up components**, not just finished items (Anti-Mage's includes
+  Perseverance and Yasha next to Battle Fury and Manta Style) — choosing which
+  item counts as a "threat" is a scoring question left to Phase E4.
 - `load_players.py` — Phase 2 step 3. Parses the hand-curated `docs/players_id.txt` (`Name: account_id. Profile status: public|private.`) → `players` (all players, public and private). For players marked public only, fetches OpenDota `/players/{account_id}/heroes` → `player_hero_stats` (per-hero `games_played`/`wins`/`with_*`/`against_*`/`last_played`, zero-game rows skipped). Private profiles are recorded in `players` (so they're known) but no history is fetched for them — OpenDota returns all-zero data for private profiles anyway, and it'd just be wasted API calls. Stratz is *not* used for player history — see gotcha below.
 
 **Engine** (`src/app/engine/`):
