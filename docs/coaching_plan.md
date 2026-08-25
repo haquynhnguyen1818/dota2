@@ -340,7 +340,30 @@ precision and poor recall, so the blanks are the work, not the 1s.
 | `silence` | 12 | Stratz modifier flags (`isSilence`/`isMute`) | **Weak** — misses Death Prophet |
 | `illusion` | 2 | Ability-name match | **Near-useless** — misses Phantom Lancer, Chaos Knight |
 | `break` | 1 | Stratz `isBreak` | **Near-useless** — only Hoodwink; misses Viper, Slark, Doom, Spirit Breaker |
-| `save`, `dispel`, `waveclear`, `cheap_ult` | 0 | — | Untouched, all judgement |
+| `cheap_ult` | 41 × `1`, 47 × `0` | OpenDota ability cooldowns | **Good, and the only column with real `0`s** — see below |
+| `save`, `dispel`, `waveclear` | 0 | — | Untouched, all judgement |
+
+**`cheap_ult` is the one column carrying explicit `0`s.** It is measured, not
+guessed: OpenDota's `hero_abilities` + `abilities` give complete cooldown data,
+and an ultimate is identified as the hero's single ability with a **3-level**
+cooldown array (basic abilities have 4). That picked the correct ult by name in
+12 of 12 spot checks — `lion_finger_of_death`, `tidehunter_ravage`,
+`faceless_void_chronosphere` and so on. `1` = max-level cooldown ≤ 60s, `0` =
+measured above 60s, blank = no single 3-level ult (passive ults like Tiny's
+Grow, no-cooldown ults like Storm's Ball Lightning, or multi-spell kits like
+Invoker). Treat `0` and blank identically when loading; the distinction is only
+there to tell a human which rows still need a decision.
+
+⚠️ **Two `0`s that cooldown alone gets wrong: Axe and Legion Commander.**
+Culling Blade and Duel both *reset on kill*, so they are up far more often than
+their 70s/50s suggests. Legion Commander already reads `1` (50s); Axe reads `0`
+at 70s and probably shouldn't. Cooldown cannot see reset, charge, or mana-gated
+mechanics — which is exactly why this tag stays a judgement call at the edges.
+
+Stratz was tried first for this column and produced garbage — its `isUltimate`
+is `false` on all 2,978 abilities and its cooldowns are missing for many heroes,
+so a "longest 3-level ability" fallback returned 0s for Gyrocopter, Lone Druid
+and Elder Titan. **Use OpenDota for ability data, not Stratz.**
 
 Why the gaps, so nobody retries these dead ends:
 
