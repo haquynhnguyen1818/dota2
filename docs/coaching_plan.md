@@ -284,10 +284,10 @@ the hero's own abilities and talents, **not** from items they commonly buy
 | Tag | Means |
 |---|---|
 | `lockdown` | A reliable targeted disable that stops a fleeing or channelling hero — stun, hex, root, leash. Slows don't count |
-| `save` | Can rescue an ally who would otherwise die: a shield, heal-through-burst, invulnerability, or a reposition |
-| `dispel` | Can remove buffs or debuffs, basic or strong, on allies or enemies |
+| `save` | Can rescue an ally who would otherwise die. Judged on *outcome*, not mechanism: heal, shield, invulnerability or reposition all count |
+| `dispel` | Can remove modifiers — cleansing an ally or stripping an enemy's buffs, basic or strong |
 | `waveclear` | Can delete a creep wave with one or two casts from roughly level 6 without needing items |
-| `tower_dmg` | Takes buildings unusually fast — high base damage, siege summons, or a building-focused ability |
+| `tower_dmg` | Can convert a won fight into buildings. An objective-speed tag, **not** a damage tag |
 | `silence` | Has a silence or mute in the kit |
 | `break` | Has a **native** break, i.e. disables passives without Silver Edge |
 | `cheap_ult` | Ultimate is up for nearly every fight — low cooldown or low mana, no long windows without it |
@@ -298,6 +298,32 @@ A hero can carry several tags; there's no cap and no requirement that every
 hero has at least one. Where a tag is arguable, prefer marking it only when the
 hero is *known* for that thing — the point is to separate lineups that clearly
 have a capability from ones that clearly don't.
+
+**`save` vs `dispel`** — the two that overlap. `save` asks *"does my carry live
+through the focus?"*; `dispel` asks *"does my debuff stay on?"* Mark both where
+both apply.
+
+- `save` only: Dazzle (Shallow Grave), Oracle (False Promise), Winter Wyvern
+  (Cold Embrace), Io (Relocate/Tether), Treant (Living Armor) — none removes a
+  modifier.
+- `dispel` only: Slark (Dark Pact), Lifestealer (Rage), Juggernaut (Blade
+  Fury), Tidehunter (Kraken Shell) — self-cleanses that rescue nobody.
+- Both: Abaddon (Aphotic Shield — strong dispel *and* absorbs the burst),
+  Legion Commander (Press the Attack — strong dispel *and* heal).
+
+**`tower_dmg`** — can this lineup turn a won fight into buildings? A team with
+none of it wins fights and stalls; a team with three ends early. The trap:
+**spell nukes don't damage buildings**, so raw damage doesn't qualify — Lion,
+Bane, Axe and Sven all hit hard and none takes towers quickly. Four things do
+qualify:
+
+1. Summons that attack buildings — Lycan, Broodmother, Nature's Prophet,
+   Enigma, Visage, Chen, Lone Druid, Beastmaster
+2. Illusions — Phantom Lancer, Naga Siren, Terrorblade, Chaos Knight, Meepo
+3. Explicit bonus building damage — Tiny (Tree Grab), Dragon Knight (Elder
+   Dragon Form), Leshrac (Diabolic Edict), Pugna (Nether Blast), Death Prophet
+   (Exorcism), Shadow Shaman (Serpent Wards), Jakiro (Liquid Fire)
+4. Right-click speed that melts towers — Troll Warlord, Drow, Luna, Clinkz
 
 ### What was auto-filled, and how far to trust it
 
