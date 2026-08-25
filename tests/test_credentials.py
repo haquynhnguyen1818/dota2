@@ -28,13 +28,11 @@ def no_env(monkeypatch):
 @pytest.fixture
 def from_config(monkeypatch, no_env):
     monkeypatch.setattr(credentials, "creds_opendota", CONFIG)
-    monkeypatch.setattr(credentials, "creds_stratzapi", {"token": "cfg-token"})
 
 
 @pytest.fixture
 def no_config(monkeypatch):
     monkeypatch.setattr(credentials, "creds_opendota", {})
-    monkeypatch.setattr(credentials, "creds_stratzapi", {})
 
 
 # --------------------------------------------------------------------------
@@ -87,25 +85,31 @@ def test_a_password_is_not_required(no_config, monkeypatch, no_env):
 # Stratz
 # --------------------------------------------------------------------------
 
-def test_stratz_headers_come_from_config(from_config):
+def test_stratz_headers_come_from_the_environment(no_config, monkeypatch):
+    monkeypatch.setenv("STRATZ_TOKEN", "env-token")
     assert stratz_headers() == {
-        "Authorization": "Bearer cfg-token",
+        "Authorization": "Bearer env-token",
         "User-Agent": "STRATZ_API",
     }
 
 
-def test_stratz_token_from_the_environment_wins(from_config, monkeypatch):
-    monkeypatch.setenv("STRATZ_TOKEN", "env-token")
-    assert stratz_headers()["Authorization"] == "Bearer env-token"
+def test_stratz_never_falls_back_to_config(from_config):
+    # Unlike the database, config.py must NOT satisfy Stratz. The token is
+    # bound to one IP and belongs to the Droplet; a laptop picking it up from
+    # config.py would re-bind it and break the next weekly refresh, days later
+    # and silently. Failing loudly here is the whole point.
+    with pytest.raises(RuntimeError, match="bound to one IP"):
+        stratz_headers()
 
 
-def test_an_empty_stratz_token_falls_through_to_config(from_config, monkeypatch):
-    # Compose writes STRATZ_TOKEN="" when the var is absent from .env, which
-    # `os.environ.get` would otherwise hand back as a real value.
+def test_an_empty_stratz_token_raises(from_config, monkeypatch):
+    # Compose writes STRATZ_TOKEN="" when the var is absent from .env, so an
+    # empty string must be treated as missing rather than as a real token.
     monkeypatch.setenv("STRATZ_TOKEN", "")
-    assert stratz_headers()["Authorization"] == "Bearer cfg-token"
+    with pytest.raises(RuntimeError):
+        stratz_headers()
 
 
-def test_missing_stratz_token_raises(no_config, no_env):
-    with pytest.raises(RuntimeError, match="Stratz token not configured"):
+def test_missing_stratz_token_names_the_way_out(no_config, no_env):
+    with pytest.raises(RuntimeError, match="docker compose"):
         stratz_headers()

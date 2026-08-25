@@ -14,9 +14,9 @@ This module is the only place that knows the env var names.
 import os
 
 try:
-    from app.config import creds_opendota, creds_stratzapi
+    from app.config import creds_opendota
 except ImportError:  # the production image ships no config.py
-    creds_opendota, creds_stratzapi = {}, {}
+    creds_opendota = {}
 
 
 def db_kwargs() -> dict[str, str]:
@@ -40,11 +40,26 @@ def db_kwargs() -> dict[str, str]:
 
 
 def stratz_headers() -> dict[str, str]:
-    """Auth headers for api.stratz.com. The User-Agent is required, not cosmetic."""
-    token = os.environ.get("STRATZ_TOKEN") or creds_stratzapi.get("token", "")
+    """Auth headers for api.stratz.com. The User-Agent is required, not cosmetic.
+
+    **Environment only -- deliberately no config.py fallback**, unlike the
+    database. Stratz binds a token to one IP address: a second caller gets
+    `403 You cannot use different IP Addresses when using the API` and the whole
+    token starts refusing, not just the new caller. The Droplet owns the token
+    because it owns the weekly refresh cron, so a Stratz loader run from a
+    laptop must fail loudly here rather than silently re-bind the token and
+    break the next cron run days later.
+
+    The container gets STRATZ_TOKEN from infra/.env. Setting it in a local shell
+    still works, which is the point: that is a deliberate act, not an accident.
+    """
+    token = os.environ.get("STRATZ_TOKEN", "")
     if not token:
         raise RuntimeError(
-            "Stratz token not configured: set STRATZ_TOKEN, or provide "
-            "src/app/config.py for local dev."
+            "STRATZ_TOKEN is not set. The Stratz token is bound to one IP and "
+            "belongs to the Droplet -- running this locally would re-bind it and "
+            "break the weekly refresh. Run the loader there instead:\n"
+            "  docker compose -f infra/docker-compose.yml run --rm -T api "
+            "python -m app.ingestion.<loader>"
         )
     return {"Authorization": f"Bearer {token}", "User-Agent": "STRATZ_API"}

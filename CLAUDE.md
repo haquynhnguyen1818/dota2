@@ -67,10 +67,32 @@ Rate Limit: 60 calls per minute
 
 ## 8. Stratz API tiers
 Tier: Default Token
-Calls per Second: 20
-Calls per Minute: 250
-Calls per Hour: 2000
-Calls per Day: 10000
+Calls per Second: 8
+Calls per Minute: 150
+Calls per Hour: 1500
+Calls per Day: 15000
+
+Measured 2026-08-25 from the live `x-ratelimit-limit-*` headers on a 200
+response. These replace the previously documented 20/250/2000/10000, which were
+wrong on every window.
+
+**The token is bound to a single IP address.** A second caller gets
+`403 You cannot use different IP Addresses when using the API`, and the whole
+token starts refusing — not just the new caller. **The Droplet owns the token**
+because it owns the weekly refresh cron. `stratz_headers()` therefore reads
+`STRATZ_TOKEN` from the environment only and will not fall back to
+`config.py`, so a Stratz loader run from a laptop fails loudly instead of
+silently re-binding the token and breaking the next cron run. To run one
+against real data, run it on the Droplet:
+
+```
+docker compose -f infra/docker-compose.yml run --rm -T api \
+    python -m app.ingestion.<loader>
+```
+
+**Keep any single Stratz response under ~500KB** — above ~1MB Stratz truncates
+it mid-stream (`ChunkedEncodingError`), intermittently rather than reliably.
+See docs/progress.md for the measurements and the two fixes.
 
 ## 9. Start of session
 Read docs/progress.md first — it has current status, key implementation

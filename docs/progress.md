@@ -281,14 +281,23 @@ is confirmed working in production.
 - `load_players.py` — Phase 2 step 3. Parses the hand-curated `docs/players_id.txt` (`Name: account_id. Profile status: public|private.`) → `players` (all players, public and private). For players marked public only, fetches OpenDota `/players/{account_id}/heroes` → `player_hero_stats` (per-hero `games_played`/`wins`/`with_*`/`against_*`/`last_played`, zero-game rows skipped). Private profiles are recorded in `players` (so they're known) but no history is fetched for them — OpenDota returns all-zero data for private profiles anyway, and it'd just be wasted API calls. Stratz is *not* used for player history — see gotcha below.
 
 **Credentials** (`src/app/credentials.py`): `db_kwargs()` and
-`stratz_headers()`, both **environment first, `src/app/config.py` second**.
-Production containers get env vars from `infra/.env` via docker-compose and
-ship no `config.py`; local dev is the reverse. Everything that touches Postgres
-or Stratz goes through here — the API, all loaders, both engine scripts — so
-they cannot drift on where credentials come from. Env var names:
+`stratz_headers()`. Everything that touches Postgres or Stratz goes through
+here — the API, all loaders, both engine scripts — so they cannot drift on
+where credentials come from. Production containers get env vars from
+`infra/.env` via docker-compose and ship no `config.py`; local dev is the
+reverse. Env var names:
 `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME`/`DB_SSLMODE` and
-`STRATZ_TOKEN`. `sslmode` defaults to `require` when unset, so a missing value
-never silently downgrades a hosted connection.
+`STRATZ_TOKEN`.
+
+**The two resolve differently on purpose:**
+- `db_kwargs()` is **environment first, `config.py` second**. `sslmode`
+  defaults to `require` when unset, so a missing value never silently
+  downgrades a hosted connection.
+- `stratz_headers()` is **environment only — no `config.py` fallback**, so a
+  Stratz loader run from a laptop raises immediately instead of re-binding the
+  IP-locked token and breaking the next weekly refresh days later (see the
+  gotcha below). Setting `STRATZ_TOKEN` in a local shell still works; that is a
+  deliberate act rather than an accident.
 
 This exists because **ingestion could not run in production at all** until
 2026-08-25: only `api/db.py` read the environment, and every loader imported
@@ -439,12 +448,20 @@ import ...` resolves from any CWD.
   the API` — the *whole token* starts refusing, not just the new caller. Found
   the hard way on 2026-08-25: after the Droplet ran the refresh job, every
   Stratz call from the laptop 403'd while the Droplet kept working.
-  **The Droplet owns the token**, because it owns the weekly schedule. Running
-  any Stratz loader locally re-binds the token and breaks the next cron run.
-  For local Stratz work, either run it through the container on the Droplet
-  (`docker compose -f infra/docker-compose.yml run --rm -T api python -m
-  app.ingestion.<loader>`) or get a second token. OpenDota has no such
-  restriction — those loaders run anywhere.
+  **Decision (user, 2026-08-25): the Droplet is the only machine that uses the
+  Stratz token**, because it owns the weekly refresh cron. This is enforced in
+  code, not just documented — `stratz_headers()` reads `STRATZ_TOKEN` from the
+  environment and deliberately does *not* fall back to `config.py`, so a
+  laptop run fails loudly rather than silently re-binding the token and
+  breaking cron days later. To run a Stratz loader against real data:
+
+  ```
+  docker compose -f infra/docker-compose.yml run --rm -T api \
+      python -m app.ingestion.<loader>
+  ```
+
+  The token in a local `config.py` is now inert for Stratz and can be removed.
+  OpenDota has no such restriction — those loaders run anywhere.
 - ⚠️ **Stratz truncates large responses mid-stream — keep every query under
   ~500KB.** It surfaces as `requests.exceptions.ChunkedEncodingError: Response
   ended prematurely` on a chunked gzip body. It is a *size* problem: not a rate
