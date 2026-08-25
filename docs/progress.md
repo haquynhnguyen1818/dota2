@@ -303,10 +303,13 @@ machine. Thirteen modules carried the same duplicated 7-line
   `compute_hero_matchup_advantage` rebuild. The two hand-authored CSV loaders
   (`load_heroes_roles`, `load_hero_tags`) are deliberately excluded — they only
   change when the file changes, which is a manual act.
-  **A failing step does not abort the rest**: every step is an idempotent
-  upsert, so a transient Stratz 429 on one loader shouldn't cost the other
-  nine, and the next run repairs partial state. Failures are collected and the
-  process exits non-zero so cron surfaces them.
+  **A failing step gets one retry (30s apart) and then lets the rest run**:
+  every step is an idempotent upsert, so transient Stratz flakiness on one
+  loader shouldn't cost the other nine, and the next run repairs partial state.
+  The retry exists because Stratz's response truncation is intermittent near
+  the size boundary (see the gotcha below) — and a single flaky step is exactly
+  what leaves the rolling tables on different weeks. Failures are collected and
+  the process exits non-zero so cron surfaces them.
   Each run ends by printing the newest week in each rolling table and
   **warning if they disagree** — that mismatch is the documented "numbers look
   off" cause, and the log is where you'd catch it.
@@ -431,6 +434,39 @@ import ...` resolves from any CWD.
   that specific hazard is gone. The separate table stands on its own merits
   now — writing bucket rows into `stratz_hero_win_week` would collide bucket 0
   with the per-week total row on the same PK.
+- ⚠️ **The Stratz API token is bound to a single IP address.** Calling from a
+  second machine returns `403 You cannot use different IP Addresses when using
+  the API` — the *whole token* starts refusing, not just the new caller. Found
+  the hard way on 2026-08-25: after the Droplet ran the refresh job, every
+  Stratz call from the laptop 403'd while the Droplet kept working.
+  **The Droplet owns the token**, because it owns the weekly schedule. Running
+  any Stratz loader locally re-binds the token and breaks the next cron run.
+  For local Stratz work, either run it through the container on the Droplet
+  (`docker compose -f infra/docker-compose.yml run --rm -T api python -m
+  app.ingestion.<loader>`) or get a second token. OpenDota has no such
+  restriction — those loaders run anywhere.
+- ⚠️ **Stratz truncates large responses mid-stream**, raising
+  `requests.exceptions.ChunkedEncodingError: Response ended prematurely` on a
+  chunked gzip body. It is a size problem, not a rate limit or an auth problem,
+  and it is intermittent near the boundary rather than a hard ceiling. Measured
+  from the Droplet:
+
+  | Query | Bytes | Result |
+  |---|---|---|
+  | synergy, 127 heroes, 1 week | 1,038,517 | ok (but failed twice first) |
+  | duration, 127 heroes, **all weeks** | 1,862,679 | **truncated** |
+  | duration, 127 heroes, 2 weeks | 305,316 | ok |
+
+  This is why `load_stratz_hero_duration.TAKE_WEEKS` is **4, not 2000** — that
+  table holds 14 rows per hero-week, so all weeks is ~2.8MB. Keep any new
+  Stratz query well under ~1MB, either by narrowing `take` or by paging the
+  hero list. `refresh_weekly.py` retries each step once for the intermittent
+  band.
+- **The Stratz rate limits in CLAUDE.md §8 are wrong.** Measured from live
+  `x-ratelimit-*` response headers on 2026-08-25: **8/second, 150/minute,
+  1500/hour, 15000/day** — tighter than the documented 20/250/2000 on the short
+  windows, more generous on the day. `load_stratz_item_timings`'s 0.3s delay
+  (~3.3/s, ~78/min) is comfortably inside the real limits.
 - **Stratz publishes completed weeks only — data older than a few days is not
   a staleness bug.** Weeks start Thursday 00:00 UTC and only appear once
   closed, so the newest week available is always the one that ended on the most

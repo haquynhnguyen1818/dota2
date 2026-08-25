@@ -48,7 +48,26 @@ ON CONFLICT (hero_id, with_hero_id) DO UPDATE SET
 """
 
 
+# Stratz truncates large responses mid-stream (see docs/progress.md). All 127
+# heroes in one request returns ~1.05MB and fails roughly half the time --
+# measured 3 failures in 6 attempts, buffered and streamed alike. 32 heroes is
+# ~265KB, with comfortable margin.
+#
+# Batching costs nothing: each requested hero comes back with all 126 partners
+# regardless of how many heroes are asked for, verified against the live API.
+# So the batches never need to be cross-joined, and 4 requests per week stay far
+# inside the 8/second limit.
+HERO_BATCH = 32
+
+
 def fetch_hero_synergy(hero_ids: list[int], week: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for start in range(0, len(hero_ids), HERO_BATCH):
+        rows += _fetch_synergy_batch(hero_ids[start : start + HERO_BATCH], week)
+    return rows
+
+
+def _fetch_synergy_batch(hero_ids: list[int], week: int) -> list[dict[str, Any]]:
     headers = stratz_headers()
     response = requests.post(
         STRATZ_URL,

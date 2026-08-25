@@ -45,7 +45,22 @@ ON CONFLICT (hero_id, vs_hero_id) DO UPDATE SET
 """
 
 
+# Batched for the same reason as load_stratz_synergy.py: Stratz truncates large
+# responses mid-stream. All 127 heroes returns ~787KB here -- it has not failed
+# yet, but that is uncomfortably close to the ~1MB where the sibling synergy
+# query fails half the time. 32 heroes is ~200KB. Each requested hero returns
+# all 126 opponents regardless of batch size, so nothing is lost.
+HERO_BATCH = 32
+
+
 def fetch_hero_matchups(hero_ids: list[int], week: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for start in range(0, len(hero_ids), HERO_BATCH):
+        rows += _fetch_matchup_batch(hero_ids[start : start + HERO_BATCH], week)
+    return rows
+
+
+def _fetch_matchup_batch(hero_ids: list[int], week: int) -> list[dict[str, Any]]:
     headers = stratz_headers()
     response = requests.post(
         STRATZ_URL,
