@@ -1,128 +1,128 @@
 hero_id,Heroes,lockdown,save,dispel,waveclear,tower_dmg,silence,break,cheap_ult,illusion,summons
-102,Abaddon,,,,,,,,0,,
-73,Alchemist,1,,,,,,,,,
-68,Ancient Apparition,1,,,,,,,1,,
-1,Anti-Mage,,,,,,,,0,,
-113,Arc Warden,,,,,,,,1,,
-2,Axe,1,,,,,,,0,,
-3,Bane,1,,,,,,,0,,
-65,Batrider,1,,,,,,,1,,
-38,Beastmaster,,,,,,,,1,,1
-4,Bloodseeker,,,,,,1,,0,,
-62,Bounty Hunter,,,,,,,,1,,
-78,Brewmaster,1,,,,,,,0,,
-99,Bristleback,,,,,,,,,,
-61,Broodmother,,,,,1,,,1,,1
-96,Centaur Warrunner,1,,,,,,,0,,
-81,Chaos Knight,1,,,,1,,,,,
-66,Chen,,,,,1,,,0,,1
-56,Clinkz,,,,,1,,,1,,
-51,Clockwerk,1,,,,,,,1,,
-5,Crystal Maiden,1,,,,,,,0,,
-55,Dark Seer,,,,,,,,,,
-119,Dark Willow,1,,,,,,,0,,
-135,Dawnbreaker,,,,,,,,0,,
-50,Dazzle,,,,,,,,1,,
-43,Death Prophet,,,,,1,,,,,
-87,Disruptor,,,,,,1,,0,,
-69,Doom,,,,,,1,,0,,
-49,Dragon Knight,,,,,1,,,,,
-6,Drow Ranger,,,,,1,,,,,
-7,Earthshaker,1,,,,,,,0,,
-107,Earth Spirit,1,,,,,1,,0,,
-103,Elder Titan,1,,,,,,,0,,
-106,Ember Spirit,1,,,,,,,,,
-58,Enchantress,,,,,1,,,,,
-33,Enigma,1,,,,1,1,,0,,
-41,Faceless Void,1,,,,,,,0,,
-121,Grimstroke,,,,,,1,,1,,
-72,Gyrocopter,1,,,,,,,1,,
-123,Hoodwink,1,,,,,,1,,,
-59,Huskar,,,,,,,,1,,
-74,Invoker,1,,,,1,,,,,
-91,Io,,,,,,,,0,,
-64,Jakiro,1,,,,1,,,0,,
-8,Juggernaut,,,,,1,,,,,
-90,Keeper of the Light,1,,,,,,,0,,
-145,Kez,,,,,,,,,,
-23,Kunkka,1,,,,,,,0,,
-155,Largo,,,,,,,,,,
-104,Legion Commander,1,,,,,1,,1,,
-52,Leshrac,,,,,1,,,,,
-31,Lich,1,,,,,,,1,,
-54,Lifestealer,,,,,,,,1,,
-25,Lina,1,,,,,,,1,,
-26,Lion,1,,,,,,,1,,
-80,Lone Druid,1,,,,1,,,1,,
-48,Luna,,,,,1,,,,,
-77,Lycan,,,,,1,,,,,1
-97,Magnus,1,,,,,,,,,
-136,Marci,,,,,,,,1,,
-129,Mars,1,,,,,,,0,,
-94,Medusa,1,,,,,,,,,
-82,Meepo,1,,,,1,,,,,
-9,Mirana,,,,,,,,0,,
-114,Monkey King,1,,,,,,,0,,
-10,Morphling,1,,,,,,,1,,
-138,Muerta,,,,,,,,1,,
-89,Naga Siren,1,,,,1,,,0,1,
-53,Nature's Prophet,,,,,1,,,,,1
-36,Necrophos,1,,,,,,,,,
-60,Night Stalker,,,,,,1,,0,,
-88,Nyx Assassin,1,,,,,,,1,,
-84,Ogre Magi,1,,,,,,,,,
-57,Omniknight,,,,,,,,0,,
-111,Oracle,1,,,,,,,1,,
-76,Outworld Destroyer,1,,,,,,,0,,
-120,Pangolier,1,,,,,,,0,,
-44,Phantom Assassin,,,,,,,,,,
-12,Phantom Lancer,,,,,1,,,,,
-110,Phoenix,1,,,,,,,,,
-137,Primal Beast,,,,,,,,1,,
-13,Puck,1,,,,,,,,,
-14,Pudge,1,,,,,,,1,,
-45,Pugna,,,,,1,,,,,
-39,Queen of Pain,,,,,,,,0,,
-15,Razor,1,,,,1,,,1,,
-32,Riki,,,,,,1,,,,
-131,Ringmaster,,,,,,,,0,,1
-86,Rubick,1,,,,,,,1,,
-16,Sand King,1,,,,,,,0,,
-79,Shadow Demon,,,,,,,,1,,
-11,Shadow Fiend,,,,,,,,0,,
-27,Shadow Shaman,1,,,,1,,,0,,
-75,Silencer,,,,,,1,,,,
-101,Skywrath Mage,,,,,,1,,1,,
-28,Slardar,1,,,,,,,,,
-93,Slark,,,,,,,,1,,
-128,Snapfire,,,,,,,,0,,
-35,Sniper,1,,,,,,,1,,
-67,Spectre,,,,,,,,0,,
-71,Spirit Breaker,1,,,,,,,1,,
-17,Storm Spirit,1,,,,,,,,,
-18,Sven,,,,,,,,0,,
-105,Techies,1,,,,,1,,,,
-46,Templar Assassin,,,,,,,,1,,
-109,Terrorblade,,,,,1,,,1,1,
-29,Tidehunter,1,,,,,,,0,,
-98,Timbersaw,,,,,,,,,,
-34,Tinker,,,,,1,,,1,,
-19,Tiny,1,,,,1,,,,,
-83,Treant Protector,1,,,,,,,0,,
-95,Troll Warlord,1,,,,1,,,0,,
-100,Tusk,1,,,,,,,1,,
-108,Underlord,1,,,,,,,0,,
-85,Undying,,,,,,,,,,
-70,Ursa,,,,,,,,1,,
-20,Vengeful Spirit,,,,,,,,1,,
-40,Venomancer,,,,,1,,,0,,
-47,Viper,,,,,,,,1,,
-92,Visage,1,,,,1,,,0,,1
-126,Void Spirit,,,,,,,,,,
-37,Warlock,,,,,,,,,,1
-63,Weaver,,,,,,,,1,,
-21,Windranger,1,,,,,,,1,,
-112,Winter Wyvern,1,,,,,,,0,,
-30,Witch Doctor,1,,,,,,,0,,
-42,Wraith King,1,,,,,,,0,,
-22,Zeus,,,,,,,,,,
+102,Abaddon,0,1,1,0,0,0,0,0,0,0
+73,Alchemist,1,0,0,1,0,0,0,0,0,0
+68,Ancient Apparition,1,0,0,0,0,0,0,1,0,0
+1,Anti-Mage,0,0,0,0,0,0,0,0,0,0
+113,Arc Warden,0,0,0,0,0,0,0,1,0,1
+2,Axe,1,0,0,0,0,0,0,0,0,0
+3,Bane,1,0,0,0,0,0,0,0,0,0
+65,Batrider,1,0,0,1,0,0,0,1,0,0
+38,Beastmaster,0,0,0,0,0,0,0,1,0,1
+4,Bloodseeker,0,0,0,0,0,1,0,0,0,0
+62,Bounty Hunter,0,0,0,0,0,0,0,1,0,0
+78,Brewmaster,1,0,0,0,0,0,0,0,0,1
+99,Bristleback,0,0,0,1,0,0,0,1,0,0
+61,Broodmother,0,0,0,1,1,0,0,1,0,1
+96,Centaur Warrunner,1,0,0,0,0,0,0,0,0,0
+81,Chaos Knight,1,0,0,0,1,0,0,0,1,0
+66,Chen,0,1,0,0,1,0,0,0,0,1
+56,Clinkz,0,0,0,1,1,0,0,1,0,0
+51,Clockwerk,1,0,0,0,0,0,0,1,0,0
+5,Crystal Maiden,1,0,0,0,0,0,0,0,0,0
+55,Dark Seer,0,0,0,1,0,0,0,0,0,0
+119,Dark Willow,1,0,0,0,0,0,0,0,0,0
+135,Dawnbreaker,1,0,0,1,0,0,0,0,0,0
+50,Dazzle,0,1,0,0,0,0,0,1,0,0
+43,Death Prophet,0,0,0,1,1,1,0,0,0,0
+87,Disruptor,1,1,0,0,0,1,0,0,0,0
+69,Doom,1,0,0,1,0,1,1,0,0,0
+49,Dragon Knight,1,0,0,1,1,0,0,0,0,0
+6,Drow Ranger,0,0,0,1,1,1,0,1,0,0
+7,Earthshaker,1,0,0,1,0,0,0,0,0,0
+107,Earth Spirit,1,1,0,0,0,1,0,1,0,0
+103,Elder Titan,1,0,0,0,0,0,0,0,0,0
+106,Ember Spirit,1,0,0,1,0,0,0,1,0,0
+58,Enchantress,0,1,0,0,1,0,0,1,0,1
+33,Enigma,1,0,0,1,1,1,0,0,0,1
+41,Faceless Void,1,0,0,0,0,0,0,0,0,0
+121,Grimstroke,0,0,0,1,0,1,0,1,0,0
+72,Gyrocopter,1,0,0,1,0,0,0,1,0,0
+123,Hoodwink,1,0,0,0,0,0,1,1,0,0
+59,Huskar,0,0,0,0,0,0,0,1,0,0
+74,Invoker,1,0,0,1,1,0,0,1,0,1
+91,Io,0,1,0,0,0,0,0,0,0,0
+64,Jakiro,1,0,0,1,1,0,0,0,0,0
+8,Juggernaut,0,1,1,1,0,0,0,0,0,0
+90,Keeper of the Light,1,0,0,1,0,0,0,0,0,0
+145,Kez,0,0,0,1,0,0,0,1,0,0
+23,Kunkka,1,0,0,1,0,0,0,0,0,0
+155,Largo,1,1,1,1,0,0,0,1,0,0
+104,Legion Commander,1,1,1,1,0,1,0,1,0,0
+52,Leshrac,1,0,0,1,1,0,0,0,0,0
+31,Lich,1,1,0,1,0,0,0,0,0,0
+54,Lifestealer,0,0,1,0,0,0,0,1,0,0
+25,Lina,1,0,0,1,0,0,0,1,0,0
+26,Lion,1,0,0,0,0,0,1,1,0,0
+80,Lone Druid,1,0,0,0,1,0,0,1,0,1
+48,Luna,1,0,0,1,1,0,0,0,0,0
+77,Lycan,0,0,0,0,1,0,0,0,0,1
+97,Magnus,1,0,0,1,0,0,0,0,0,0
+136,Marci,1,0,0,0,0,0,0,1,0,0
+129,Mars,1,0,0,1,0,0,0,0,0,0
+94,Medusa,1,0,0,1,0,0,0,0,0,0
+82,Meepo,1,0,0,1,1,0,0,1,0,1
+9,Mirana,1,0,0,1,0,0,0,0,0,0
+114,Monkey King,1,0,0,1,0,0,0,0,0,0
+10,Morphling,1,0,0,1,1,0,0,1,0,0
+138,Muerta,0,0,0,1,1,1,0,1,0,0
+89,Naga Siren,1,0,1,1,1,0,1,0,1,0
+53,Nature's Prophet,1,1,0,1,1,0,0,1,0,1
+36,Necrophos,1,1,0,1,0,0,0,0,0,0
+60,Night Stalker,0,0,0,0,0,1,0,0,0,0
+88,Nyx Assassin,1,0,0,0,0,0,1,1,0,0
+84,Ogre Magi,1,0,0,0,0,0,0,1,0,0
+57,Omniknight,0,1,1,0,0,0,0,0,0,0
+111,Oracle,1,1,1,0,0,0,0,1,0,0
+76,Outworld Destroyer,1,1,0,0,0,0,0,0,0,0
+120,Pangolier,1,0,0,1,0,0,0,0,0,0
+44,Phantom Assassin,0,0,0,0,0,0,1,1,0,0
+12,Phantom Lancer,0,0,1,0,1,0,0,1,1,0
+110,Phoenix,1,1,0,1,0,0,0,0,0,0
+137,Primal Beast,1,0,0,1,0,0,1,1,0,0
+13,Puck,1,0,0,1,0,1,0,0,0,0
+14,Pudge,1,0,0,0,0,0,0,1,0,0
+45,Pugna,0,1,0,1,1,0,0,1,0,0
+39,Queen of Pain,0,0,0,1,0,0,0,0,0,0
+15,Razor,1,0,0,1,0,0,0,1,0,0
+32,Riki,0,0,0,0,0,1,0,1,0,0
+131,Ringmaster,0,1,1,0,0,0,0,0,0,1
+86,Rubick,1,0,0,1,0,0,0,1,0,0
+16,Sand King,1,0,0,1,0,0,0,0,0,0
+79,Shadow Demon,1,1,0,0,0,0,1,1,0,0
+11,Shadow Fiend,0,0,0,1,0,0,0,0,0,0
+27,Shadow Shaman,1,0,0,1,1,0,1,0,0,0
+75,Silencer,0,0,0,0,0,1,0,0,0,0
+101,Skywrath Mage,0,0,0,0,0,1,0,1,0,0
+28,Slardar,1,0,0,0,0,0,0,1,0,0
+93,Slark,1,0,1,1,0,0,0,1,0,0
+128,Snapfire,1,1,0,1,0,0,0,0,0,0
+35,Sniper,1,0,0,1,0,0,0,1,0,0
+67,Spectre,0,0,0,0,0,0,0,0,1,0
+71,Spirit Breaker,1,0,0,0,0,0,0,1,0,0
+17,Storm Spirit,1,0,0,0,0,0,0,1,0,0
+18,Sven,1,0,0,1,0,0,0,0,0,0
+105,Techies,1,0,0,1,0,1,0,1,0,0
+46,Templar Assassin,0,0,0,0,0,0,0,1,0,0
+109,Terrorblade,0,0,0,1,1,0,0,1,1,0
+29,Tidehunter,1,0,1,1,0,0,0,0,0,0
+98,Timbersaw,0,0,0,1,0,0,0,1,0,0
+34,Tinker,0,0,0,1,0,0,0,1,0,0
+19,Tiny,1,0,0,1,1,0,0,1,0,0
+83,Treant Protector,1,1,0,0,0,0,0,0,0,0
+95,Troll Warlord,1,0,0,1,1,0,0,0,0,0
+100,Tusk,1,1,0,1,0,0,0,1,0,0
+108,Underlord,1,0,0,1,0,0,0,0,0,0
+85,Undying,0,1,0,0,0,0,0,0,0,0
+70,Ursa,0,0,1,0,0,0,0,1,0,0
+20,Vengeful Spirit,1,1,0,0,0,0,0,1,0,0
+40,Venomancer,0,0,0,1,1,0,0,0,0,0
+47,Viper,0,0,0,0,0,0,1,1,0,0
+92,Visage,1,0,0,0,1,0,0,0,0,1
+126,Void Spirit,0,0,0,1,0,1,0,0,0,0
+37,Warlock,0,1,0,0,0,0,0,0,0,1
+63,Weaver,0,0,0,0,0,0,0,1,0,0
+21,Windranger,1,0,0,1,0,0,0,1,0,0
+112,Winter Wyvern,1,1,0,0,0,0,0,0,0,0
+30,Witch Doctor,1,1,0,1,0,0,0,0,0,0
+42,Wraith King,1,0,0,1,1,0,0,0,0,0
+22,Zeus,0,0,0,1,0,0,0,0,0,0

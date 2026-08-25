@@ -325,12 +325,26 @@ qualify:
    (Exorcism), Shadow Shaman (Serpent Wards), Jakiro (Liquid Fire)
 4. Right-click speed that melts towers — Troll Warlord, Drow, Luna, Clinkz
 
-### What was auto-filled, and how far to trust it
+### Status: complete
 
-The CSV was bootstrapped from API data before the manual pass. **A `1` means a
-source positively asserted the tag; a blank means "not detected", which is
-NOT the same as "no".** No column is complete — every source here has good
-precision and poor recall, so the blanks are the work, not the 1s.
+**E3 is done.** All 1,270 cells carry an explicit `0` or `1` — there are no
+blanks, so a `0` means "no", not "unreviewed". 127 heroes, no invalid values.
+Anti-Mage is the only hero with zero tags, which is correct.
+
+Two conventions settled during the manual pass, worth keeping if the file is
+ever regenerated:
+
+- **`summons` means *controllable* units.** Immobile wards do not count, so
+  Venomancer, Shadow Shaman, Undying, Pugna, Techies and Witch Doctor are all
+  `0` despite creating units.
+- **Hex counts as `break`**, since it disables passives — so Lion and Shadow
+  Shaman both carry it.
+
+### What was auto-filled first, and why the sources were what they were
+
+Kept for provenance: the CSV was bootstrapped from API data before the manual
+pass, which then corrected and completed it. Useful mainly so the rejected
+sources aren't retried.
 
 | Column | Filled | Source | Trust |
 |---|---|---|---|
