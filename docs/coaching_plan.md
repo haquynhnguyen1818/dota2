@@ -26,7 +26,7 @@ this specific 5v5?" after picking is over.
 | Trigger | Complete 5v5 draft | Not incremental. The suggester owns the incremental case |
 | Existing suggester | Untouched | No edits to `hero_matchup_advantage`, `stratz_hero_win_week`, `/draft-suggestions`, or `index.html`'s existing panels |
 | UI location | Panel on `index.html`, unlocks at 5v5 | Reuses the chips already on screen; natural flow out of drafting |
-| Lane/position source | `heroStats.stats` empirical positions | `hero_role.csv` stays scoped to the pick-suggestion feature and is not consulted by the coach. Consequence: `my_role` is a required input, not inferred — see B3 |
+| Lane/position source | `heroStats.stats` empirical positions | `hero_role.csv` stays scoped to the pick-suggestion feature and is not consulted by the coach. `my_role` is never inferred — it is an optional input, collected again in Phase G where it first affects output. See B3 |
 | Branches (orig. Phase 5) | Deferred | Revisit after the LLM phase works |
 
 ## Verified findings
@@ -213,9 +213,8 @@ B1 is deterministic by construction, which is what finally makes this easy.
 **B3.** `POST /draft-analysis`:
 
 ```json
-{ "my_hero_id": 1, "my_role": "Carry",
-  "ally_picks": [5 ids], "enemy_picks": [5 ids],
-  "player_account_id": null }
+{ "my_hero_id": 1, "my_role": null,
+  "ally_picks": [5 ids], "enemy_picks": [5 ids] }
 ```
 
 Exactly 5 and 5 required — that is the whole point of the post-draft trigger.
@@ -223,12 +222,16 @@ Exactly 5 and 5 required — that is the whole point of the post-draft trigger.
 [draft.py](../src/app/api/routers/draft.py). New endpoint, not an extension of
 `/draft-suggestions`.
 
-`my_role` is **required, not inferred**. With `hero_role.csv` scoped out of this
-feature, the only other source would be E1's position data — which doesn't
-exist yet at B3, and would be guessing at something you already know. The C1
-panel needs a "which one is me" selector regardless; role is one more dropdown
-beside it. E1's position data is then used only for `predicted_lane` (working
-out the *enemies'* likely lanes), which is what it is actually good for.
+`my_role` is **optional, and still never inferred**. It began as a required
+field with a dropdown beside the "which one is me" selector, but the role
+selector was removed after Phase C shipped: the power curve doesn't read role
+at all, so the control sat there doing nothing. Rather than infer a value —
+`hero_role.csv` is scoped out of this feature and E1's position data would be
+guessing at something you already know — the field simply accepts `null`, and
+is validated only when supplied. **Phase G brings the selector back**, because
+that is where role first changes the output. E1's position data stays reserved
+for `predicted_lane` (working out the *enemies'* likely lanes), which is what
+it is actually good for.
 
 > **Verify:** live smoke test against the real DB, one draft's numbers
 > hand-checked end to end.

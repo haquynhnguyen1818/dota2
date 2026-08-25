@@ -132,6 +132,18 @@ def test_my_hero_must_be_an_ally():
         build_context(99, "Carry", ALLIES, ENEMIES, {})
 
 
+def test_role_is_optional_and_carried_through_untouched():
+    stats = stats_from(flat(ALLIES, 0.55) | flat(ENEMIES, 0.45))
+    without = build_context(MY_HERO, None, ALLIES, ENEMIES, stats)
+    with_role = build_context(MY_HERO, "Midlane", ALLIES, ENEMIES, stats)
+    assert without.my_role is None
+    assert with_role.my_role == "Midlane"
+    # Role is context for the LLM phase only -- it must not touch the curve.
+    assert without.power_curve == with_role.power_curve
+    assert without.crossover_bucket == with_role.crossover_bucket
+    assert without.tempo_verdict == with_role.tempo_verdict
+
+
 def test_bucket_labels_follow_the_five_minute_mapping():
     assert bucket_label(3) == "15-20"
     assert bucket_label(7) == "35-40"

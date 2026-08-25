@@ -84,16 +84,21 @@ pushed to https://github.com/haquynhnguyen1818/dota2 (main).
   games on that hero — e.g. a private profile with no data pulled).
   Annotation only, does not affect ranking — see the step 4 entry below.
 - `POST /draft-analysis` — Post-draft coach, Phase B3 (see `coaching_plan.md`).
-  Body `{"my_hero_id": id, "my_role": "Carry|Midlane|Offlane|Supports",
-  "ally_picks": [5 ids], "enemy_picks": [5 ids]}`. **Requires exactly 5 and 5**
-  — this fires once a draft is complete, unlike `/draft-suggestions` which
-  answers mid-draft from partial picks. `my_hero_id` must be in `ally_picks`;
-  teams may not overlap or contain dupes. `my_role` is required, not inferred
-  (`hero_role.csv` is scoped to the pick-suggester and the coach doesn't read
-  it); it's carried through for the later LLM phase and doesn't affect the
-  curve. Returns the power curve per duration bucket (`my_win_rate`,
+  Body `{"my_hero_id": id, "my_role": null, "ally_picks": [5 ids],
+  "enemy_picks": [5 ids]}`. **Requires exactly 5 and 5** — this fires once a
+  draft is complete, unlike `/draft-suggestions` which answers mid-draft from
+  partial picks. `my_hero_id` must be in `ally_picks`; teams may not overlap or
+  contain dupes. **`my_role` is optional** (`Carry|Midlane|Offlane|Supports`,
+  validated only when supplied) and never inferred — the web UI stopped sending
+  it once the role selector was removed, since the curve doesn't read it. Phase
+  G re-collects it. Returns the power curve per duration bucket (`my_win_rate`,
   `their_win_rate`, `delta`), the `crossover_bucket`, and a `tempo_verdict`
   of `you_are_faster`/`you_win_long`/`even`/`unknown`.
+
+  **`my_hero_id` does not affect the curve** — the curve is your five heroes
+  against their five, so changing which ally is "you" legitimately returns an
+  identical curve. Verified live: the selector refetches and the SVG points
+  come back byte-identical. It is carried for Phase G, where it matters.
 - `GET /players` — public players only (id/name pairs), backs the web
   frontend's player-history selector. Added alongside the web UI build-out
   below; private players exist in the `players` table but are filtered out
@@ -138,10 +143,12 @@ before deploying. Two pages, dark "Draft Terminal" theme matching
   A card on `index.html` between the player-history selector and the role tabs.
   Locked until **both** chip lists hold 5, showing a countdown of what's still
   missing; at 5v5 it reveals a "which one is me" combo (options are the ally
-  picks only) plus a role combo, and draws the power curve. "Me" defaults to
-  the first ally so the curve is on screen without a click — safe because
-  `my_hero_id` doesn't affect the curve in v1, it's only carried through for
-  the later LLM phase. Chart is hand-rolled inline SVG, no library.
+  picks only) and draws the power curve. "Me" defaults to the first ally so
+  the curve is on screen without a click — safe because `my_hero_id` doesn't
+  affect the curve in v1, it's only carried through for the later LLM phase.
+  **There is no role selector**: it was removed after Phase C shipped because
+  the curve doesn't read role, so the control did nothing visible. Phase G
+  adds it back. Chart is hand-rolled inline SVG, no library.
   **The y-axis fits the data with a 2pp floor** (`MIN_SPAN`): averaging five
   heroes pulls hard toward 50%, so real deltas are often under 2pp and a
   0-100% axis would draw every draft as two flat lines. 50% is always kept in

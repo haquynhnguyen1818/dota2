@@ -5,17 +5,17 @@
 // five heroes' individual win rates at a given game length and ignores hero
 // interaction entirely. Never label it "win chance".
 
-const COACH_ROLES = ["Carry", "Midlane", "Offlane", "Supports"];
-
 // Deltas are small (often under 2 percentage points) because averaging five
 // heroes pulls hard toward 50%. Auto-scaling from 0-100% would render every
 // draft as two flat lines, so the y-axis fits the data -- but never tighter
 // than this, or noise looks like signal.
 const MIN_SPAN = 0.02;
 
+// No role here: the power curve doesn't read it, so a role selector would be an
+// inert control. Phase G (LLM synthesis) is where role starts mattering, and
+// the API takes it as optional until then.
 const coachState = {
   myHeroName: null,
-  role: "Carry",
   analysis: null,
   error: null,
   loading: false,
@@ -33,12 +33,6 @@ function syncCoachHeroValue() {
   el.classList.toggle("placeholder", !coachState.myHeroName);
 }
 
-function syncCoachRoleValue() {
-  const el = document.getElementById("coachRoleValue");
-  el.textContent = coachState.role || "Select role…";
-  el.classList.toggle("placeholder", !coachState.role);
-}
-
 async function refreshCoach() {
   const seq = ++coachSeq;
 
@@ -52,7 +46,6 @@ async function refreshCoach() {
     coachState.myHeroName = allyNames[0];
   }
   syncCoachHeroValue();
-  syncCoachRoleValue();
 
   if (!coachIsReady()) {
     coachState.analysis = null;
@@ -68,7 +61,7 @@ async function refreshCoach() {
   renderCoach();
 
   try {
-    const result = await getDraftAnalysis(myHeroId, coachState.role, state.allyPicks, state.opponentPicks);
+    const result = await getDraftAnalysis(myHeroId, null, state.allyPicks, state.opponentPicks);
     if (seq !== coachSeq) return; // a newer request has since superseded this one
     coachState.analysis = result;
   } catch (err) {
@@ -226,7 +219,6 @@ function renderCoach() {
 
 function setupCoach() {
   syncCoachHeroValue();
-  syncCoachRoleValue();
 
   setupCombo({
     comboId: "coachHeroCombo",
@@ -249,24 +241,4 @@ function setupCoach() {
     },
   });
 
-  setupCombo({
-    comboId: "coachRoleCombo",
-    triggerId: "coachRoleTrigger",
-    panelId: "coachRolePanel",
-    listId: "coachRoleList",
-    clearId: "coachRoleClear",
-    valueId: "coachRoleValue",
-    options: () => COACH_ROLES,
-    getValue: () => coachState.role,
-    onSelect: (v) => {
-      coachState.role = v;
-      syncCoachRoleValue();
-      refreshCoach();
-    },
-    onClear: () => {
-      coachState.role = "Carry";
-      syncCoachRoleValue();
-      refreshCoach();
-    },
-  });
 }

@@ -23,8 +23,9 @@ router = APIRouter(prefix="/draft-analysis", tags=["draft-analysis"])
 TEAM_SIZE = 5
 
 # Reuses the role vocabulary already in roles_csv_import rather than inventing
-# a new one. my_role is context carried through for the LLM phase; the power
-# curve itself doesn't read it.
+# a new one. my_role is optional context carried through for the LLM phase; the
+# power curve doesn't read it, and the UI dropped the selector for now, so it is
+# only validated when actually supplied.
 ROLES = {"Carry", "Midlane", "Offlane", "Supports"}
 
 
@@ -45,7 +46,7 @@ def get_draft_analysis(
         raise HTTPException(status_code=400, detail="ally_picks and enemy_picks must not overlap")
     if request.my_hero_id not in request.ally_picks:
         raise HTTPException(status_code=400, detail="my_hero_id must be one of ally_picks")
-    if request.my_role not in ROLES:
+    if request.my_role is not None and request.my_role not in ROLES:
         raise HTTPException(status_code=400, detail=f"my_role must be one of {sorted(ROLES)}")
 
     name_by_id = _load_hero_names(conn)

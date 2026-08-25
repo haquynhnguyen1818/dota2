@@ -63,7 +63,7 @@ class CurvePoint:
 @dataclass(frozen=True)
 class DraftContext:
     my_hero_id: int
-    my_role: str
+    my_role: str | None
     power_curve: list[CurvePoint]
     crossover_bucket: int | None
     tempo_verdict: str
@@ -124,7 +124,7 @@ def _tempo_verdict(curve: list[CurvePoint]) -> str:
 
 def build_context(
     my_hero_id: int,
-    my_role: str,
+    my_role: str | None,
     ally_picks: list[int],
     enemy_picks: list[int],
     stats: BucketStats,
