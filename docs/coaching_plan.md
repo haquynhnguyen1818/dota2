@@ -469,6 +469,11 @@ entirely post-release. `patch_notes.released_at` is what makes this a query
 rather than a guess; compare it against `stratz_hero_duration_wr`'s two latest
 weeks whenever the numbers look off after a patch.
 
+**Keeping the window current is now a cron job**, `app/jobs/refresh_weekly.py`
+— see progress.md. Note that Stratz publishes *completed* weeks only, so the
+coach's data is always at least a few days behind by construction; that is not
+a bug and no re-run improves it.
+
 
 ## Phase G — LLM synthesis · ~2 evenings
 

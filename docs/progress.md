@@ -280,6 +280,52 @@ is confirmed working in production.
     commas.
 - `load_players.py` — Phase 2 step 3. Parses the hand-curated `docs/players_id.txt` (`Name: account_id. Profile status: public|private.`) → `players` (all players, public and private). For players marked public only, fetches OpenDota `/players/{account_id}/heroes` → `player_hero_stats` (per-hero `games_played`/`wins`/`with_*`/`against_*`/`last_played`, zero-game rows skipped). Private profiles are recorded in `players` (so they're known) but no history is fetched for them — OpenDota returns all-zero data for private profiles anyway, and it'd just be wasted API calls. Stratz is *not* used for player history — see gotcha below.
 
+**Credentials** (`src/app/credentials.py`): `db_kwargs()` and
+`stratz_headers()`, both **environment first, `src/app/config.py` second**.
+Production containers get env vars from `infra/.env` via docker-compose and
+ship no `config.py`; local dev is the reverse. Everything that touches Postgres
+or Stratz goes through here — the API, all loaders, both engine scripts — so
+they cannot drift on where credentials come from. Env var names:
+`DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME`/`DB_SSLMODE` and
+`STRATZ_TOKEN`. `sslmode` defaults to `require` when unset, so a missing value
+never silently downgrades a hosted connection.
+
+This exists because **ingestion could not run in production at all** until
+2026-08-25: only `api/db.py` read the environment, and every loader imported
+the gitignored `config.py` directly, which pinned them to the developer's
+machine. Thirteen modules carried the same duplicated 7-line
+`psycopg.connect(host=..., port=..., ...)` block; they now call
+`psycopg.connect(**db_kwargs())`.
+
+**Jobs** (`src/app/jobs/`):
+- `refresh_weekly.py` — refreshes every time-varying table. Runs the 10
+  loaders in dependency order, ending with the derived
+  `compute_hero_matchup_advantage` rebuild. The two hand-authored CSV loaders
+  (`load_heroes_roles`, `load_hero_tags`) are deliberately excluded — they only
+  change when the file changes, which is a manual act.
+  **A failing step does not abort the rest**: every step is an idempotent
+  upsert, so a transient Stratz 429 on one loader shouldn't cost the other
+  nine, and the next run repairs partial state. Failures are collected and the
+  process exits non-zero so cron surfaces them.
+  Each run ends by printing the newest week in each rolling table and
+  **warning if they disagree** — that mismatch is the documented "numbers look
+  off" cause, and the log is where you'd catch it.
+
+  Scheduled on the Droplet's root crontab, **Fridays 06:30 UTC**:
+
+  ```
+  30 6 * * 5 cd /root/dota2 && docker compose -f infra/docker-compose.yml \
+      run --rm -T api python -m app.jobs.refresh_weekly \
+      >> /var/log/dota2-refresh.log 2>&1
+  ```
+
+  Friday rather than Thursday on purpose: Stratz weeks roll over Thursday
+  00:00 UTC and the newly-closed week isn't published instantly, so Friday
+  leaves a day of margin. Reuses the `api` service (`docker compose run`
+  overrides its CMD), which is why `STRATZ_TOKEN` is declared on that service
+  in `docker-compose.yml` despite the API itself never reading it. `-T`
+  disables TTY allocation, required under cron.
+
 **Engine** (`src/app/engine/`):
 - `draft_context.py` — Post-draft coach, Phases B1 + E4. `build_context()` is
   pure: it takes a `ContextData` bundle rather than a connection, so it
@@ -385,6 +431,15 @@ import ...` resolves from any CWD.
   that specific hazard is gone. The separate table stands on its own merits
   now — writing bucket rows into `stratz_hero_win_week` would collide bucket 0
   with the per-week total row on the same PK.
+- **Stratz publishes completed weeks only — data older than a few days is not
+  a staleness bug.** Weeks start Thursday 00:00 UTC and only appear once
+  closed, so the newest week available is always the one that ended on the most
+  recent Thursday. On 2026-08-25 (Tuesday) both Stratz *and* every one of our
+  tables sat at the week of 2026-08-13; the in-progress week of 08-20 was not
+  offered at all. **Re-running a loader cannot make the data fresher than
+  this** — check `winWeek`'s own newest week before concluding a table is
+  behind. This is what `refresh_weekly.py` exists for: to pick up each new week
+  as it closes, which nothing did before 2026-08-25.
 - **Patches now land roughly monthly, so a 2-week window can straddle one.**
   The coaching plan was written assuming 7.40b had been live ~8 months; the
   real current patch is **7.41e, released 2026-07-30**, and the 7.41 line

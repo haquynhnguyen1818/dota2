@@ -30,10 +30,20 @@ STRATZ_URL = "https://api.stratz.com/graphql"
 
 HEADERS = stratz_headers()
 
-# `take` counts weeks, not rows -- 2000 fetches every week Stratz retains.
-# All weeks are stored raw; consumers roll up to the latest 2 at query time,
-# same convention as stratz_hero_win_week.
-TAKE_WEEKS = 2000
+# `take` counts weeks, not rows, and this is deliberately small.
+#
+# This table holds 14 rows per hero-week, so asking for every week Stratz
+# retains (`take: 2000`, which is what this used to do) returns ~2.8MB gzipped
+# -- and Stratz truncates it mid-stream, raising ChunkedEncodingError. Measured
+# from the Droplet: all weeks cut off at 1,862,679 bytes, while 2 weeks
+# returned 305,316 bytes cleanly. Four weeks is ~600KB, well clear of the
+# cutoff, and still repairs a month of missed refresh runs.
+#
+# Nothing is lost by asking for less: rows upsert on
+# (hero_id, week, duration_bucket), so weeks already loaded stay put, and
+# consumers only ever roll up to the latest 2 weeks at query time. Use a larger
+# value only for a one-off historical backfill, and expect to page it.
+TAKE_WEEKS = 4
 
 DURATION_QUERY = """
 query ($heroIds: [Short], $take: Int) {

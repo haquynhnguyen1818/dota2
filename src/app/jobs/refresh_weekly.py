@@ -10,9 +10,15 @@ re-running gets anything fresher; the job exists to pick up each new week as it
 closes, which nothing did before.
 
 Every step is an idempotent upsert, so re-running is safe and a partial run is
-repaired by the next one. That is why a failing step does not abort the rest:
-a transient Stratz 429 on one loader should not cost the other nine. Failures
-are collected and the process exits non-zero, so cron surfaces them.
+repaired by the next one. That is why a failing step gets one retry and then
+lets the rest proceed: transient Stratz flakiness on one loader should not cost
+the other nine. Failures are collected and the process exits non-zero, so cron
+surfaces them.
+
+⚠️ **The Stratz token is bound to a single IP address** -- calling the API from
+a second machine returns `403 You cannot use different IP Addresses when using
+the API`. Since this job owns the schedule, the Droplet owns the token. Running
+a Stratz loader from a laptop re-binds it and breaks the next cron run.
 
 Ordering matters in one place -- `compute_hero_matchup_advantage` rebuilds a
 derived table and must run after the matchup and win-week loaders that feed it.
@@ -58,6 +64,8 @@ STEPS = [
 # Every table the coach and the suggester read on a rolling 2-week window. If
 # these disagree, the two features are answering from different time bases --
 # the documented cause of "the numbers look off". See docs/progress.md.
+RETRY_DELAY_SECONDS = 30
+
 WEEK_TABLES = [
     "stratz_hero_win_week",
     "stratz_hero_duration_wr",
@@ -74,7 +82,12 @@ def report_latest_weeks() -> None:
             table: conn.execute(f"SELECT max(week) FROM {table}").fetchone()[0]
             for table in WEEK_TABLES
         }
-        version = conn.execute("SELECT max(version) FROM patch_notes").fetchone()[0]
+        # By release date, not max(version) -- version is text, and "7.9"
+        # sorts above "7.10".
+        row = conn.execute(
+            "SELECT version FROM patch_notes ORDER BY released_at DESC LIMIT 1"
+        ).fetchone()
+        version = row[0] if row else "none"
 
     for table, week in weeks.items():
         stamp = datetime.fromtimestamp(week, UTC).strftime("%Y-%m-%d") if week else "none"
@@ -90,6 +103,31 @@ def report_latest_weeks() -> None:
         )
 
 
+def run_step(step) -> bool:
+    """Run one loader, with a single retry.
+
+    Stratz truncates large responses intermittently (ChunkedEncodingError on a
+    chunked gzip stream), and a step that fails where its neighbours succeed is
+    exactly what leaves the rolling tables on different weeks. One retry is
+    enough for the flakiness actually observed; a step that fails twice has a
+    real problem and should be read in the log.
+    """
+    for attempt in (1, 2):
+        started = time.monotonic()
+        try:
+            step()
+        except Exception:
+            traceback.print_exc()
+            print(f"attempt {attempt} FAILED after {time.monotonic() - started:.1f}s", flush=True)
+            if attempt == 1:
+                print(f"retrying in {RETRY_DELAY_SECONDS}s", flush=True)
+                time.sleep(RETRY_DELAY_SECONDS)
+        else:
+            print(f"ok in {time.monotonic() - started:.1f}s", flush=True)
+            return True
+    return False
+
+
 def run() -> int:
     print(f"=== weekly refresh started {datetime.now(UTC):%Y-%m-%d %H:%M:%S} UTC ===", flush=True)
     started = time.monotonic()
@@ -97,15 +135,8 @@ def run() -> int:
 
     for name, step in STEPS:
         print(f"\n--- {name} ---", flush=True)
-        step_started = time.monotonic()
-        try:
-            step()
-        except Exception:
+        if not run_step(step):
             failures.append(name)
-            traceback.print_exc()
-            print(f"FAILED after {time.monotonic() - step_started:.1f}s", flush=True)
-        else:
-            print(f"ok in {time.monotonic() - step_started:.1f}s", flush=True)
 
     print("\n--- latest week per rolling table ---", flush=True)
     try:
