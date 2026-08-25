@@ -4,7 +4,7 @@ from pathlib import Path
 
 import psycopg
 
-from app.config import creds_opendota
+from app.credentials import db_kwargs
 
 HERO_ROLE_CSV = Path(__file__).resolve().parents[3] / "data" / "hero_role.csv"
 
@@ -31,14 +31,7 @@ def main() -> None:
     role_names = sorted({row["Role"] for row in rows})
     pairs = sorted({(int(row["hero_id"]), row["Role"]) for row in rows})
 
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         with conn.cursor() as cur:
             cur.execute(CREATE_ROLES_TABLE)
             cur.execute(CREATE_HERO_ROLES_TABLE)

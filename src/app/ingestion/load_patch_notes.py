@@ -30,7 +30,7 @@ import psycopg
 import requests
 from psycopg.types.json import Jsonb
 
-from app.config import creds_opendota
+from app.credentials import db_kwargs
 
 PATCH_LIST_URL = "https://www.dota2.com/datafeed/patchnoteslist"
 PATCH_NOTES_URL = "https://www.dota2.com/datafeed/patchnotes"
@@ -199,14 +199,7 @@ def main() -> None:
     payload = fetch_patch_notes(version)
     items, abilities = fetch_names()
 
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         heroes = dict(conn.execute("SELECT id, localized_name FROM heroes").fetchall())
         notes_text = render_notes(payload, heroes, items, abilities)
         with conn.cursor() as cur:

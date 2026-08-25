@@ -21,7 +21,7 @@ matchUp-population win rate. See dota2_ranking_adv.txt for the spec.
 """
 import psycopg
 
-from app.config import creds_opendota
+from app.credentials import db_kwargs
 
 CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS hero_matchup_advantage (
@@ -87,14 +87,7 @@ FROM with_xwr
 
 
 def main() -> None:
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         with conn.cursor() as cur:
             cur.execute(CREATE_TABLE)
             cur.execute("TRUNCATE hero_matchup_advantage")

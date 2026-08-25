@@ -4,14 +4,11 @@ from typing import Any
 import psycopg
 import requests
 
-from app.config import creds_opendota, creds_stratzapi
+from app.credentials import db_kwargs, stratz_headers
 
 STRATZ_URL = "https://api.stratz.com/graphql"
 
-HEADERS = {
-    "Authorization": f"Bearer {creds_stratzapi['token']}",
-    "User-Agent": "STRATZ_API",
-}
+HEADERS = stratz_headers()
 
 CONSTANTS_HEROES_QUERY = """
 {
@@ -310,14 +307,7 @@ def main() -> None:
     win_day_rows = fetch_win_day(hero_ids)
     ban_rows = fetch_bans()
 
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         with conn.cursor() as cur:
             cur.execute(CREATE_STRATZ_HEROES_TABLE)
             cur.execute(CREATE_STRATZ_HERO_STATS_TABLE)
@@ -334,7 +324,7 @@ def main() -> None:
     print(
         f"Loaded {len(heroes)} stratz_heroes/stratz_hero_stats rows, "
         f"{len(win_week_rows)} win_week rows, {len(win_day_rows)} win_day rows, "
-        f"and {len(ban_rows)} ban rows into '{creds_opendota['db']}'."
+        f"and {len(ban_rows)} ban rows into '{db_kwargs()['dbname']}'."
     )
 
 

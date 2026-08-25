@@ -17,7 +17,7 @@ from pathlib import Path
 
 import psycopg
 
-from app.config import creds_opendota
+from app.credentials import db_kwargs
 
 HERO_TAGS_CSV = Path(__file__).resolve().parents[3] / "data" / "hero_tags.csv"
 
@@ -62,14 +62,7 @@ def read_rows() -> list[tuple]:
 def main() -> None:
     rows = read_rows()
 
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         with conn.cursor() as cur:
             cur.execute(CREATE_HERO_TAGS_TABLE)
             cur.executemany(UPSERT_HERO_TAGS, rows)

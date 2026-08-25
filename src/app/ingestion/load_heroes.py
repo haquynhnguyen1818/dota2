@@ -5,7 +5,7 @@ from typing import Any
 import psycopg
 import requests
 
-from app.config import creds_opendota
+from app.credentials import db_kwargs
 
 OPENDOTA_BASE_URL = "https://api.opendota.com/api"
 
@@ -169,14 +169,7 @@ def main() -> None:
         matchup_rows.extend(fetch_hero_matchups(hero["id"]))
         time.sleep(1.5)  # stay under OpenDota's unauthenticated rate limit
 
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         with conn.cursor() as cur:
             cur.execute(CREATE_HEROES_TABLE)
             cur.execute(CREATE_HERO_STATS_TABLE)
@@ -188,7 +181,7 @@ def main() -> None:
 
     print(
         f"Loaded {len(heroes)} heroes, {len(hero_stats)} hero_stats rows, "
-        f"and {len(matchup_rows)} hero_matchups rows into '{creds_opendota['db']}'."
+        f"and {len(matchup_rows)} hero_matchups rows into '{db_kwargs()['dbname']}'."
     )
 
 

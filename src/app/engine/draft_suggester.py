@@ -24,7 +24,7 @@ from typing import Optional
 
 import psycopg
 
-from app.config import creds_opendota
+from app.credentials import db_kwargs
 
 ROLES = ["Carry", "Midlane", "Offlane"]
 MAX_PICKS = 5
@@ -139,14 +139,7 @@ def print_lists(
 
 
 def main() -> None:
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         id_by_name, name_by_id = load_heroes(conn)
         support_ids = load_support_ids(conn)
 

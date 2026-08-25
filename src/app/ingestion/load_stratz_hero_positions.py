@@ -23,14 +23,11 @@ from typing import Any
 import psycopg
 import requests
 
-from app.config import creds_opendota, creds_stratzapi
+from app.credentials import db_kwargs, stratz_headers
 
 STRATZ_URL = "https://api.stratz.com/graphql"
 
-HEADERS = {
-    "Authorization": f"Bearer {creds_stratzapi['token']}",
-    "User-Agent": "STRATZ_API",
-}
+HEADERS = stratz_headers()
 
 RECENT_WEEKS = 2
 
@@ -91,14 +88,7 @@ def fetch_positions(hero_ids: list[int], week: int) -> list[dict[str, Any]]:
 
 
 def main() -> None:
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         hero_ids = [r[0] for r in conn.execute("SELECT id FROM stratz_heroes ORDER BY id").fetchall()]
         weeks = [
             r[0]
@@ -121,7 +111,7 @@ def main() -> None:
         by_hero[r["hero_id"]] += r["games_played"]
     print(
         f"Loaded {len(rows)} stratz_hero_positions rows "
-        f"({len(by_hero)} heroes over weeks {weeks}) into '{creds_opendota['db']}'."
+        f"({len(by_hero)} heroes over weeks {weeks}) into '{db_kwargs()['dbname']}'."
     )
 
 

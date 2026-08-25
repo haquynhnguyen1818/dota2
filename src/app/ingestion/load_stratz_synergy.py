@@ -5,7 +5,7 @@ from typing import Any
 import psycopg
 import requests
 
-from app.config import creds_opendota, creds_stratzapi
+from app.credentials import db_kwargs, stratz_headers
 
 STRATZ_URL = "https://api.stratz.com/graphql"
 
@@ -49,10 +49,7 @@ ON CONFLICT (hero_id, with_hero_id) DO UPDATE SET
 
 
 def fetch_hero_synergy(hero_ids: list[int], week: int) -> list[dict[str, Any]]:
-    headers = {
-        "Authorization": f"Bearer {creds_stratzapi['token']}",
-        "User-Agent": "STRATZ_API",
-    }
+    headers = stratz_headers()
     response = requests.post(
         STRATZ_URL,
         json={"query": SYNERGY_QUERY, "variables": {"heroIds": hero_ids, "take": 200, "week": week}},
@@ -79,14 +76,7 @@ def fetch_hero_synergy(hero_ids: list[int], week: int) -> list[dict[str, Any]]:
 
 
 def main() -> None:
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         hero_ids = [r[0] for r in conn.execute("SELECT id FROM heroes ORDER BY id").fetchall()]
         weeks = [
             r[0]
@@ -123,7 +113,7 @@ def main() -> None:
 
     print(
         f"Loaded {len(synergy_rows)} stratz_hero_synergy rows "
-        f"(summed over weeks {weeks}) into '{creds_opendota['db']}'."
+        f"(summed over weeks {weeks}) into '{db_kwargs()['dbname']}'."
     )
 
 

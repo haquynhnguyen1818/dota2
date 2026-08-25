@@ -26,6 +26,9 @@ services:
       DB_NAME: ${DB_NAME}
       DB_SSLMODE: disable
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      # Unused by the API itself; needed by `docker compose run api
+      # python -m app.jobs.refresh_weekly`, which reuses this service.
+      STRATZ_TOKEN: ${STRATZ_TOKEN}
     ports:
       - "8000:8000"
 

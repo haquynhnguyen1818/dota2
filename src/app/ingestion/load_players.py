@@ -13,7 +13,7 @@ from typing import Any
 import psycopg
 import requests
 
-from app.config import creds_opendota
+from app.credentials import db_kwargs
 
 OPENDOTA_BASE_URL = "https://api.opendota.com/api"
 
@@ -129,14 +129,7 @@ def main() -> None:
         hero_stats_rows.extend(fetch_player_hero_stats(player["account_id"]))
         time.sleep(1.5)  # stay under OpenDota's unauthenticated rate limit
 
-    with psycopg.connect(
-        host=creds_opendota["host"],
-        port=creds_opendota["port"],
-        user=creds_opendota["user"],
-        password=creds_opendota["pw"],
-        dbname=creds_opendota["db"],
-        sslmode=creds_opendota.get("sslmode", "require"),
-    ) as conn:
+    with psycopg.connect(**db_kwargs()) as conn:
         with conn.cursor() as cur:
             cur.execute(CREATE_PLAYERS_TABLE)
             cur.execute(CREATE_PLAYER_HERO_STATS_TABLE)
@@ -147,7 +140,7 @@ def main() -> None:
     skipped = [p["player_name"] for p in players if not p["is_public"]]
     print(
         f"Loaded {len(players)} players ({len(public_players)} public) and "
-        f"{len(hero_stats_rows)} player_hero_stats rows into '{creds_opendota['db']}'. "
+        f"{len(hero_stats_rows)} player_hero_stats rows into '{db_kwargs()['dbname']}'. "
         f"Skipped history for private profiles: {skipped}"
     )
 
