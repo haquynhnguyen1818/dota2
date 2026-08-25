@@ -12,8 +12,14 @@ Stores the raw distribution, not a precomputed median — same split as the rest
 of `ingestion/`, and it leaves p25/p75 or win-rate-weighted timings available
 later without a re-fetch.
 
-Two things to know before using this table:
+Three things to know before using this table:
   * `minute` is Stratz's `time` field, already in minutes.
+  * **`instance` is which copy of the item this is** — 0 is the first purchase,
+    and values run up to 3 for items heroes stack. It is part of the primary
+    key. Threat timings want `instance = 0`, the first time the enemy gets the
+    item. Leaving it out of the key silently overwrites one instance with
+    another and corrupts the counts for the ~4% of (item, minute) cells
+    affected; it cost 5,154 rows before it was caught.
   * It covers **build-up components too**, not just finished items — Anti-Mage's
     list includes Perseverance and Yasha alongside Battle Fury and Manta Style.
     Deciding which item counts as a "threat" is a scoring question, deliberately
@@ -47,6 +53,9 @@ ITEMS_QUERY = """
       id
       shortName
       displayName
+      components {
+        componentId
+      }
     }
   }
 }
@@ -57,6 +66,7 @@ query ($heroId: Short!, $week: Long) {
   heroStats {
     itemFullPurchase(heroId: $heroId, week: $week) {
       itemId
+      instance
       time
       matchCount
       winCount
@@ -69,16 +79,18 @@ CREATE_ITEMS_TABLE = """
 CREATE TABLE IF NOT EXISTS stratz_items (
     id INTEGER PRIMARY KEY,
     short_name TEXT,
-    display_name TEXT
+    display_name TEXT,
+    is_component BOOLEAN
 )
 """
 
 UPSERT_ITEM = """
-INSERT INTO stratz_items (id, short_name, display_name)
-VALUES (%(id)s, %(short_name)s, %(display_name)s)
+INSERT INTO stratz_items (id, short_name, display_name, is_component)
+VALUES (%(id)s, %(short_name)s, %(display_name)s, %(is_component)s)
 ON CONFLICT (id) DO UPDATE SET
     short_name = EXCLUDED.short_name,
-    display_name = EXCLUDED.display_name
+    display_name = EXCLUDED.display_name,
+    is_component = EXCLUDED.is_component
 """
 
 CREATE_PURCHASES_TABLE = """
@@ -86,17 +98,18 @@ CREATE TABLE IF NOT EXISTS stratz_hero_item_purchase (
     hero_id INTEGER REFERENCES stratz_heroes(id),
     week BIGINT,
     item_id INTEGER,
+    instance INTEGER,
     minute INTEGER,
     games_played BIGINT,
     wins BIGINT,
-    PRIMARY KEY (hero_id, week, item_id, minute)
+    PRIMARY KEY (hero_id, week, item_id, instance, minute)
 )
 """
 
 UPSERT_PURCHASE = """
-INSERT INTO stratz_hero_item_purchase (hero_id, week, item_id, minute, games_played, wins)
-VALUES (%(hero_id)s, %(week)s, %(item_id)s, %(minute)s, %(games_played)s, %(wins)s)
-ON CONFLICT (hero_id, week, item_id, minute) DO UPDATE SET
+INSERT INTO stratz_hero_item_purchase (hero_id, week, item_id, instance, minute, games_played, wins)
+VALUES (%(hero_id)s, %(week)s, %(item_id)s, %(instance)s, %(minute)s, %(games_played)s, %(wins)s)
+ON CONFLICT (hero_id, week, item_id, instance, minute) DO UPDATE SET
     games_played = EXCLUDED.games_played,
     wins = EXCLUDED.wins
 """
@@ -128,9 +141,26 @@ def _clean(value: str | None) -> str | None:
 
 
 def fetch_items() -> list[dict[str, Any]]:
+    """Item constants, flagged with whether each is a build-up part of something else.
+
+    `is_component` is derived, not given: an item is a component if any other
+    item lists it in `components`. It separates Perseverance/Yasha/Sange from
+    Battle Fury/Manta/BKB, which is what `enemy_clocks` needs.
+
+    Known wart: **Blink Dagger flags as a component** because Overwhelming and
+    Arcane Blink build from it, even though its own timing is a real threat.
+    So treat this as one input to picking threat items, not the whole rule.
+    """
+    items = stratz_query(ITEMS_QUERY)["constants"]["items"]
+    component_ids = {c["componentId"] for i in items for c in (i["components"] or [])}
     return [
-        {"id": i["id"], "short_name": _clean(i["shortName"]), "display_name": _clean(i["displayName"])}
-        for i in stratz_query(ITEMS_QUERY)["constants"]["items"]
+        {
+            "id": i["id"],
+            "short_name": _clean(i["shortName"]),
+            "display_name": _clean(i["displayName"]),
+            "is_component": i["id"] in component_ids,
+        }
+        for i in items
     ]
 
 
@@ -143,6 +173,7 @@ def fetch_purchases(hero_id: int, week: int) -> list[dict[str, Any]]:
             "hero_id": hero_id,
             "week": week,
             "item_id": r["itemId"],
+            "instance": r["instance"],
             "minute": r["time"],
             "games_played": r["matchCount"],
             "wins": r["winCount"],

@@ -232,10 +232,20 @@ is confirmed working in production.
   Stores the **raw per-minute distribution**, not a precomputed median, so
   p25/p75 or win-rate-weighted timings stay available without a re-fetch.
   `heroId` is singular on this endpoint → 1 call per hero per week, 254 total,
-  throttled at 0.3s to stay inside Stratz's 250/min. ⚠️ The item list includes
-  **build-up components**, not just finished items (Anti-Mage's includes
-  Perseverance and Yasha next to Battle Fury and Manta Style) — choosing which
-  item counts as a "threat" is a scoring question left to Phase E4.
+  throttled at 0.3s to stay inside Stratz's 250/min. 157,167 rows, 111 items.
+  - ⚠️ **`instance` must be in the primary key.** It is which copy of the item
+    this is (0 = first purchase, up to 3 for stacked items). Omitting it lets
+    the upsert overwrite one instance with another, silently corrupting counts
+    — it cost 5,154 rows before being caught. **Threat timings want
+    `instance = 0`.**
+  - ⚠️ `stratz_items.is_component` is *derived* (an item any other item lists
+    among its `components`) and separates Perseverance/Yasha/Sange from
+    Battle Fury/Manta/BKB. **It is not sufficient on its own** to pick threat
+    items: Blink Dagger flags as a component because Overwhelming/Arcane Blink
+    build from it, so filtering on it alone drops the single most important
+    Earthshaker timing. It also keeps junk — Wraith Band (2 min), Bracer
+    (2 min), Greater Healing Lotus (39 min) are all terminal. E4 needs a
+    better rule than this flag alone.
 - `load_players.py` — Phase 2 step 3. Parses the hand-curated `docs/players_id.txt` (`Name: account_id. Profile status: public|private.`) → `players` (all players, public and private). For players marked public only, fetches OpenDota `/players/{account_id}/heroes` → `player_hero_stats` (per-hero `games_played`/`wins`/`with_*`/`against_*`/`last_played`, zero-game rows skipped). Private profiles are recorded in `players` (so they're known) but no history is fetched for them — OpenDota returns all-zero data for private profiles anyway, and it'd just be wasted API calls. Stratz is *not* used for player history — see gotcha below.
 
 **Engine** (`src/app/engine/`):
