@@ -22,7 +22,7 @@ this specific 5v5?" after picking is over.
 | Decision | Value | Why |
 |---|---|---|
 | Time basis | Rolling 2 weeks, everywhere | Matches `hero_wr`/`wr_a_b`. Mixed time bases are the documented cause of "numbers look off" — see progress.md |
-| `patch` column | **Dropped** from all new tables | Current patch 7.40b has been live since 2025-12-24 (~8 months), so patch-partitioning yields one giant bucket anyway |
+| `patch` column | **Dropped** from all new tables | A 2-week window almost always sits inside one patch, so the column would be a near-constant. See the correction below |
 | Trigger | Complete 5v5 draft | Not incremental. The suggester owns the incremental case |
 | Existing suggester | Untouched | No edits to `hero_matchup_advantage`, `stratz_hero_win_week`, `/draft-suggestions`, or `index.html`'s existing panels |
 | UI location | Panel on `index.html`, unlocks at 5v5 | Reuses the chips already on screen; natural flow out of drafting |
@@ -396,15 +396,79 @@ Why the gaps, so nobody retries these dead ends:
   ability names follow no convention — `demonic_conversion`, `juxtapose` and
   `spawn_spiderlings` all mean "summon or illusion" without saying so.
 
-## Phase F — Patch blob · ~½ evening
+## Phase F — Patch blob · me · done 2026-08-25
 
 Source: **https://www.dota2.com/patches**. Still worth doing for the LLM
 prompt even though `patch` was dropped as a column — the version string pins
 what the model is allowed to assume.
 
-- **you:** confirm whether to scrape that page or paste the notes once.
-- **me:** store the blob with the version string from `constants.gameVersions`
-  (currently `{id: 182, name: "7.40b"}`).
+**No scraping needed, so the scrape-vs-paste question never had to be
+answered.** The page renders client-side off two keyless JSON endpoints:
+
+```
+/datafeed/patchnoteslist              -> all 117 patches, oldest first
+/datafeed/patchnotes?version=7.41e    -> that patch's notes
+```
+
+`load_patch_notes.py` reads both, resolves names, renders text, and upserts one
+row into `patch_notes (version, released_at, notes_text, raw, fetched_at)`. Both
+the rendered text and the raw payload are stored — same call
+`load_stratz_item_timings.py` made with its per-minute distribution, so a better
+renderer later needs no re-fetch.
+
+**The feed carries no names, only numeric ids** (`hero_id: 2`,
+`ability_id: 5008`). Resolved from `heroes` for heroes and OpenDota's
+`constants/items` + `constants/ability_ids` + `constants/abilities` for the rest
+— 100% coverage on 7.41e. Unknown ids degrade to `Item 208` rather than raising,
+since a new patch can name something before OpenDota's constants catch up.
+
+Three quirks found and handled, all covered by tests:
+
+- **`<br>` spacer notes** carry `hide_dot: true` and no content. Dropped, along
+  with any entry whose notes are all spacers.
+- **`abilities` is optional on a hero entry** — 7.41c and 7.41d both ship hero
+  entries with only `hero_notes`. A naive `hero["abilities"]` raises.
+- **`hero_id: 1961` is Spirit Bear**, not a hero. Valve files summoned units
+  under `heroes`; it is the only one across 7.39–7.41e and it appears in four of
+  the eight patches checked. There is a matching wart in OpenDota's
+  `ability_ids`: one malformed key, `"3060,1617"`, holds two ids for a single
+  ability, so `int(key)` on that dict raises.
+
+> **Verify — done 2026-08-25.** 7.41e loaded, released 2026-07-30, 11,188 chars
+> of notes across 57 changed heroes / 26 items. `raw` round-trips out of JSONB
+> intact. Every id resolved — zero `Item N` / `Hero N` fallbacks in the output.
+> 15 renderer tests, suite 29 → 44. All five coach tables unchanged
+> (`heroes` 127, `stratz_hero_duration_wr` 33,782, `hero_tags` 127,
+> `stratz_hero_positions` 1,270, `stratz_hero_item_purchase` 157,167) and
+> `hero_matchup_advantage` unchanged at 14,868.
+
+### Correction: the patch cadence assumption was stale
+
+This plan was written believing the current patch was **7.40b, live since
+2025-12-24**. It is **7.41e, released 2026-07-30** — and the 7.41 line has
+shipped six patches since 2026-03-21, roughly monthly:
+
+```
+7.41  2026-03-21   7.41a 2026-03-24   7.41b 2026-04-07
+7.41c 2026-05-06   7.41d 2026-06-04   7.41e 2026-07-30
+```
+
+So "patch-partitioning yields one giant bucket" is no longer true. **The
+decision to drop the column still stands**, for a different reason: with a
+2-week window the window is almost always inside a single patch, so the column
+would be a near-constant per query rather than a useful partition.
+
+⚠️ **What this does introduce is a straddle risk.** Stratz weeks start Thursday.
+A patch landing mid-week splits that week's stats across two balance patches,
+and the coach would read the mix as one population. Two of the six 7.41 patches
+landed mid-week (7.41b Tuesday, 7.41c Wednesday), so this is not hypothetical.
+
+**Currently clean, and now checkable:** 7.41e landed Thursday 2026-07-30 07:00
+UTC, and the window in the DB is the weeks of 2026-08-06 and 2026-08-13 — both
+entirely post-release. `patch_notes.released_at` is what makes this a query
+rather than a guess; compare it against `stratz_hero_duration_wr`'s two latest
+weeks whenever the numbers look off after a patch.
+
 
 ## Phase G — LLM synthesis · ~2 evenings
 
@@ -413,6 +477,16 @@ what the model is allowed to assume.
   prohibition: *every number in the output must come from the supplied context;
   if a timing or win rate isn't in the input, don't state one.* Cache keyed on
   `sha256(sorted_heroes + my_hero + role + patch_version)`.
+
+⚠️ **Two prompt-size decisions inherited from E and F, both about numbers the
+model shouldn't quote.** The patch blob is 11,188 chars — affordable, but it is
+340 lines of specific numeric tuning ("Cooldown decreased from 11/10/9/8s to
+12/11/10/9s") sitting next to a rule that says only use numbers from the
+context. Consider injecting the version string plus the changed-hero *names*
+for the ten drafted heroes rather than the whole blob. Same tension on
+`enemy_clocks`, which returns 15 rows (3 items × 5 heroes) for an output that
+is four lines: either narrow it server-side or instruct the model to cite at
+most one or two. Decide both before writing the prompt.
 
 Output shape:
 

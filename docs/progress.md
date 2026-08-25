@@ -256,6 +256,28 @@ is confirmed working in production.
   read as false, since blank-vs-0 ambiguity is what makes a half-filled tag
   column silently wrong. Deriving these tags from APIs was tried and
   abandoned — see `coaching_plan.md` for which sources were rejected and why.
+- `load_patch_notes.py` — Post-draft coach, Phase F. Current Dota 2 patch notes
+  from **dota2.com's datafeed** → `patch_notes` (`version` PK, `released_at`,
+  `notes_text`, `raw` JSONB, `fetched_at`). One row, the current patch. **The
+  page at dota2.com/patches renders client-side and needs no scraping** — it
+  reads two keyless JSON endpoints, `/datafeed/patchnoteslist` (all 117 patches,
+  oldest first, so the current one is last) and
+  `/datafeed/patchnotes?version=X&language=english`. Stores the rendered text
+  *and* the raw payload, same call as `load_stratz_item_timings.py`: a better
+  renderer later needs no re-fetch. `render_notes()` is pure and unit-tested.
+  - ⚠️ **The feed carries only numeric ids, no names.** Heroes resolve from our
+    `heroes` table; items and abilities from OpenDota's `constants/items`,
+    `constants/ability_ids` and `constants/abilities`. Unknown ids degrade to
+    `Item 208` rather than raising — a new patch can name something before
+    OpenDota's constants update.
+  - ⚠️ **`hero_id: 1961` is Spirit Bear, not a hero.** Valve files summoned
+    units under `heroes`; it is the only one across 7.39-7.41e. Also note
+    `abilities` is *optional* on a hero entry (7.41c/7.41d ship hero entries
+    with only `hero_notes`), and `<br>` notes carrying `hide_dot` are spacers
+    that must be dropped.
+  - ⚠️ **OpenDota's `ability_ids` has one malformed key**, `"3060,1617"` — two
+    ids under one ability name. `int(key)` over that dict raises; split on
+    commas.
 - `load_players.py` — Phase 2 step 3. Parses the hand-curated `docs/players_id.txt` (`Name: account_id. Profile status: public|private.`) → `players` (all players, public and private). For players marked public only, fetches OpenDota `/players/{account_id}/heroes` → `player_hero_stats` (per-hero `games_played`/`wins`/`with_*`/`against_*`/`last_played`, zero-game rows skipped). Private profiles are recorded in `players` (so they're known) but no history is fetched for them — OpenDota returns all-zero data for private profiles anyway, and it'd just be wasted API calls. Stratz is *not* used for player history — see gotcha below.
 
 **Engine** (`src/app/engine/`):
@@ -363,6 +385,17 @@ import ...` resolves from any CWD.
   that specific hazard is gone. The separate table stands on its own merits
   now — writing bucket rows into `stratz_hero_win_week` would collide bucket 0
   with the per-week total row on the same PK.
+- **Patches now land roughly monthly, so a 2-week window can straddle one.**
+  The coaching plan was written assuming 7.40b had been live ~8 months; the
+  real current patch is **7.41e, released 2026-07-30**, and the 7.41 line
+  shipped six patches from 2026-03-21 onward. Stratz weeks start Thursday, so a
+  patch landing mid-week splits that week's stats across two balance patches —
+  7.41b (Tuesday) and 7.41c (Wednesday) both did. The coach would read the mix
+  as one population. **Currently clean**: 7.41e landed on a Thursday and the
+  window in the DB is the weeks of 2026-08-06 and 2026-08-13, both entirely
+  post-release. `patch_notes.released_at` makes this checkable — compare it
+  against `stratz_hero_duration_wr`'s two latest weeks before assuming a logic
+  bug when numbers shift after a patch.
 - **Hero rosters: read ids from the DB, never a hardcoded range.** A planning
   probe using `range(1, 150)` silently missed Largo (id 155) and undercounted
   by one hero's entire grid. `stratz_heroes` has 127 rows with ids up to 155.
@@ -486,9 +519,10 @@ import ...` resolves from any CWD.
 
 ## Next up
 
-- **Tests now exist, but only for `engine/draft_context.py`.** `tests/` +
-  pytest (`pip install -e ".[dev]"`, then `pytest`) landed with Phase B —
-  16 tests, no DB needed, since `build_context` is pure. Everything else
+- **Tests now exist, but only for the two pure modules.** `tests/` + pytest
+  (`pip install -e ".[dev]"`, then `pytest`) landed with Phase B — **44 tests**,
+  no DB needed: 29 for `engine/draft_context.py`'s `build_context` and 15 for
+  `ingestion/load_patch_notes.py`'s `render_notes`. Everything else
   (the matchup/draft engine, all API routers) is still spot-checked manually
   only. `draft_context.py` is deliberately split so scoring is pure and
   `load_bucket_stats` holds the only DB access — worth copying if the older
