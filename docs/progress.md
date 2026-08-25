@@ -210,10 +210,10 @@ is confirmed working in production.
 **Ingestion** (`src/app/ingestion/`):
 - `load_heroes.py` — OpenDota `/heroes`, `/heroStats`, per-hero `/matchups` → `heroes`, `hero_stats`, `hero_matchups`.
 - `load_stratz_heroes.py` — Stratz hero constants + winWeek/winDay/ban stats → `stratz_heroes`, `stratz_hero_stats`, `stratz_hero_win_week`, `stratz_hero_win_day`, `stratz_hero_bans`.
-- `load_stratz_matchups.py` — Stratz `matchUp`, summed over the latest 2 weeks (see gotcha below) → `stratz_hero_matchups`.
+- `load_stratz_matchups.py` — Stratz `matchUp`, summed over the latest 2 weeks (see gotcha below) → `stratz_hero_matchups`. Requests heroes in batches of 32 (`HERO_BATCH`) to stay under Stratz's response-truncation size — see the gotcha below.
 - `load_heroes_roles.py` — loads `data/hero_role.csv` (hero → Carry/Midlane/Offlane/Supports, hand-curated by the user) → `roles_csv_import`, `hero_roles_csv_import`.
-- `load_stratz_synergy.py` — Phase 2 step 1. Stratz `matchUp`'s `with` field (duo win rates, heroes on the same team), summed over the latest 2 weeks like `load_stratz_matchups.py` → `stratz_hero_synergy` (`hero_id`, `with_hero_id`, `games_played`, `wins`, `synergy`; directed pair, PK on both columns). 16,002 rows = full 127×126 directed matrix. `synergy` is Stratz's own precomputed TrueSynergy offset (per user request), games-played-weighted across the 2 weeks since it's a per-week ratio, not a raw count — can't just be summed like `games_played`/`wins`.
-- `load_stratz_hero_duration.py` — Post-draft coach, Phase A1 (see `coaching_plan.md`). Stratz `winWeek` with `groupBy: HERO_ID_DURATION_MINUTES` → `stratz_hero_duration_wr` (`hero_id`, `week`, `duration_bucket`, `games_played`, `wins`; PK on the first three). 33,782 rows = 127 heroes × 19 weeks × 14 buckets, a perfectly dense grid. One API call — `take` counts *weeks*, not rows. **`duration_bucket` is Stratz's `durationMinute`, a bucket index (0-14), not a minute value** — renamed on the way in so it can't be misread; buckets are ~5 min wide. All weeks are stored raw; consumers roll up to the latest 2 at query time. **Deliberately a separate table from `stratz_hero_win_week`** rather than filling in that table's unused all-zeros `duration_minute` column — see the gotcha below.
+- `load_stratz_synergy.py` — Phase 2 step 1. Stratz `matchUp`'s `with` field (duo win rates, heroes on the same team), summed over the latest 2 weeks like `load_stratz_matchups.py` → `stratz_hero_synergy` (`hero_id`, `with_hero_id`, `games_played`, `wins`, `synergy`; directed pair, PK on both columns). 16,002 rows = full 127×126 directed matrix. `synergy` is Stratz's own precomputed TrueSynergy offset (per user request), games-played-weighted across the 2 weeks since it's a per-week ratio, not a raw count — can't just be summed like `games_played`/`wins`. Batched 32 heroes at a time (`HERO_BATCH`), same as `load_stratz_matchups.py` — see the response-truncation gotcha below.
+- `load_stratz_hero_duration.py` — Post-draft coach, Phase A1 (see `coaching_plan.md`). Stratz `winWeek` with `groupBy: HERO_ID_DURATION_MINUTES` → `stratz_hero_duration_wr` (`hero_id`, `week`, `duration_bucket`, `games_played`, `wins`; PK on the first three). The table holds 33,782 rows = 127 heroes × 19 weeks × 14 buckets, a perfectly dense grid, built up over successive runs. **`TAKE_WEEKS` is 4**, not 2000 — `take` counts *weeks*, not rows, and asking for every week returns ~2.8MB, which Stratz truncates (see the gotcha below). Four weeks is ~600KB and still repairs a month of missed refresh runs; rows upsert on `(hero_id, week, duration_bucket)`, so weeks already loaded stay put. **`duration_bucket` is Stratz's `durationMinute`, a bucket index (0-14), not a minute value** — renamed on the way in so it can't be misread; buckets are ~5 min wide. All weeks are stored raw; consumers roll up to the latest 2 at query time. **Deliberately a separate table from `stratz_hero_win_week`** rather than filling in that table's unused all-zeros `duration_minute` column — see the gotcha below.
 - `load_stratz_hero_positions.py` — Post-draft coach, Phase E1. Stratz
   `heroStats.stats(groupByPosition: true)` → `stratz_hero_positions`
   (`hero_id`, `week`, `position`, `games_played`, `wins`; PK on the first
@@ -445,23 +445,35 @@ import ...` resolves from any CWD.
   (`docker compose -f infra/docker-compose.yml run --rm -T api python -m
   app.ingestion.<loader>`) or get a second token. OpenDota has no such
   restriction — those loaders run anywhere.
-- ⚠️ **Stratz truncates large responses mid-stream**, raising
-  `requests.exceptions.ChunkedEncodingError: Response ended prematurely` on a
-  chunked gzip body. It is a size problem, not a rate limit or an auth problem,
-  and it is intermittent near the boundary rather than a hard ceiling. Measured
-  from the Droplet:
+- ⚠️ **Stratz truncates large responses mid-stream — keep every query under
+  ~500KB.** It surfaces as `requests.exceptions.ChunkedEncodingError: Response
+  ended prematurely` on a chunked gzip body. It is a *size* problem: not a rate
+  limit, not auth, and not a client read pattern (buffered and `stream=True`
+  fail identically). Above ~1MB it is intermittent rather than a hard ceiling,
+  which is what makes it so easy to misdiagnose as flakiness. Measured from the
+  Droplet on 2026-08-25:
 
   | Query | Bytes | Result |
   |---|---|---|
-  | synergy, 127 heroes, 1 week | 1,038,517 | ok (but failed twice first) |
-  | duration, 127 heroes, **all weeks** | 1,862,679 | **truncated** |
+  | duration, 127 heroes, **all weeks** | ~2.8MB | **truncated** at 1,862,679 |
+  | synergy, 127 heroes, 1 week | 1,046,059 | **fails ~50%** (3 of 6 attempts) |
+  | matchups, 127 heroes, 1 week | 787,252 | no failure seen — but that is luck |
+  | synergy, 64 heroes | 528,317 | ok |
+  | synergy, 32 heroes | 265,197 | ok |
   | duration, 127 heroes, 2 weeks | 305,316 | ok |
 
-  This is why `load_stratz_hero_duration.TAKE_WEEKS` is **4, not 2000** — that
-  table holds 14 rows per hero-week, so all weeks is ~2.8MB. Keep any new
-  Stratz query well under ~1MB, either by narrowing `take` or by paging the
-  hero list. `refresh_weekly.py` retries each step once for the intermittent
-  band.
+  Two fixes came out of this, both in the loaders:
+  - `load_stratz_hero_duration.TAKE_WEEKS` is **4, not 2000**. That table holds
+    14 rows per hero-week, so every retained week is ~2.8MB.
+  - `load_stratz_synergy` and `load_stratz_matchups` both request **32 heroes
+    at a time** (`HERO_BATCH`). **Batching is lossless** — each requested hero
+    comes back with all 126 partners regardless of how many heroes are asked
+    for, verified against the live API and confirmed by both loaders still
+    producing exactly 16,002 rows (127 × 126) after the change.
+
+  `refresh_weekly.py` also retries each step once, but that is a backstop for
+  the residual band, not the fix — one retry against a 50% failure rate only
+  reaches ~75%.
 - **The Stratz rate limits in CLAUDE.md §8 are wrong.** Measured from live
   `x-ratelimit-*` response headers on 2026-08-25: **8/second, 150/minute,
   1500/hour, 15000/day** — tighter than the documented 20/250/2000 on the short
