@@ -42,3 +42,33 @@ function getDraftAnalysis(myHeroId, myRole, allyPicks, enemyPicks) {
     enemy_picks: enemyPicks,
   });
 }
+
+// Unlike apiPost, this doesn't throw on a non-2xx response -- the coach panel
+// needs the parsed body (rate-limit detail, wrong-PIN message) either way.
+async function apiPostResult(path, body) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (_) {
+    // no JSON body
+  }
+  return { ok: res.ok, status: res.status, data };
+}
+
+function getCoachPlan(myHeroId, myRole, allyPicks, enemyPicks) {
+  return apiPostResult("/coach", {
+    my_hero_id: myHeroId,
+    my_role: myRole,
+    ally_picks: allyPicks,
+    enemy_picks: enemyPicks,
+  });
+}
+
+function unlockCoach(pin) {
+  return apiPostResult("/coach/unlock", { pin });
+}

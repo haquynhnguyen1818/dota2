@@ -11,17 +11,46 @@
 // than this, or noise looks like signal.
 const MIN_SPAN = 0.02;
 
-// No role here: the power curve doesn't read it, so a role selector would be an
-// inert control. Phase G (LLM synthesis) is where role starts mattering, and
-// the API takes it as optional until then.
 const coachState = {
   myHeroName: null,
+  // Read by the power curve request too (harmlessly -- it ignores role), but
+  // it only *matters* to /coach (Phase G), which is why the selector lives
+  // here rather than being wired into the curve fetch below.
+  myRole: null,
   analysis: null,
   error: null,
   loading: false,
+  // The LLM guide (Phase H) is a separate, user-triggered request layered on
+  // top of the curve above -- its own loading/result/error state, plus the
+  // rate-limit and PIN-unlock flow.
+  plan: null,
+  planError: null,
+  planLoading: false,
+  detailOpen: false,
+  rateLimited: null, // {calls_used, limit} from a 429, or null
+  unlockError: null,
+  unlockLoading: false,
 };
 
 let coachSeq = 0;
+let planSeq = 0;
+
+function resetCoachPlan() {
+  planSeq++; // orphans any in-flight /coach or /coach/unlock request
+  coachState.plan = null;
+  coachState.planError = null;
+  coachState.planLoading = false;
+  coachState.detailOpen = false;
+  coachState.rateLimited = null;
+  coachState.unlockError = null;
+  coachState.unlockLoading = false;
+}
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = value == null ? "" : String(value);
+  return div.innerHTML;
+}
 
 function coachIsReady() {
   return state.opponentPicks.length === MAX_PICKS && state.allyPicks.length === MAX_PICKS;
@@ -35,6 +64,9 @@ function syncCoachHeroValue() {
 
 async function refreshCoach() {
   const seq = ++coachSeq;
+  // Any pick change makes the previous LLM guide (if any) stale -- it was
+  // generated for a different draft.
+  resetCoachPlan();
 
   // Drop a "me" selection that is no longer on the team, and default to the
   // first ally so the curve is already on screen rather than behind a click.
@@ -52,6 +84,7 @@ async function refreshCoach() {
     coachState.error = null;
     coachState.loading = false;
     renderCoach();
+    renderCoachPlan();
     return;
   }
 
@@ -59,6 +92,7 @@ async function refreshCoach() {
   coachState.loading = true;
   coachState.error = null;
   renderCoach();
+  renderCoachPlan();
 
   try {
     const result = await getDraftAnalysis(myHeroId, null, state.allyPicks, state.opponentPicks);
@@ -217,8 +251,205 @@ function renderCoach() {
   `;
 }
 
+// --------------------------------------------------------------------------
+// LLM guide (Phase H)
+// --------------------------------------------------------------------------
+
+async function requestCoachPlan() {
+  if (!coachIsReady() || !coachState.myHeroName) return;
+  const seq = ++planSeq;
+  const myHeroId = state.idByName[coachState.myHeroName];
+
+  coachState.planLoading = true;
+  coachState.planError = null;
+  coachState.rateLimited = null;
+  renderCoachPlan();
+
+  try {
+    const result = await getCoachPlan(myHeroId, coachState.myRole, state.allyPicks, state.opponentPicks);
+    if (seq !== planSeq) return; // superseded by a pick/role change since this fired
+
+    if (result.ok) {
+      coachState.plan = result.data;
+    } else if (result.status === 429 && result.data && result.data.detail) {
+      coachState.rateLimited = result.data.detail;
+    } else {
+      coachState.planError = "Could not generate the coaching guide.";
+    }
+  } catch (err) {
+    if (seq !== planSeq) return;
+    coachState.planError = "Could not reach the server.";
+  } finally {
+    if (seq === planSeq) {
+      coachState.planLoading = false;
+      renderCoachPlan();
+    }
+  }
+}
+
+async function requestUnlock() {
+  const input = document.getElementById("coachPinInput");
+  const pin = input ? input.value.trim() : "";
+  if (!pin) return;
+
+  coachState.unlockLoading = true;
+  coachState.unlockError = null;
+  renderCoachPlan();
+
+  try {
+    const result = await unlockCoach(pin);
+    if (result.ok) {
+      coachState.rateLimited = null;
+      coachState.unlockLoading = false;
+      await requestCoachPlan(); // retry now that the budget is raised; it renders on completion
+    } else {
+      coachState.unlockLoading = false;
+      coachState.unlockError = typeof result.data?.detail === "string" ? result.data.detail : "Incorrect PIN.";
+      renderCoachPlan();
+    }
+  } catch (err) {
+    coachState.unlockLoading = false;
+    coachState.unlockError = "Could not reach the server.";
+    renderCoachPlan();
+  }
+}
+
+function renderCoachPlan() {
+  const el = document.getElementById("coachPlanBody");
+  if (!coachIsReady()) {
+    el.innerHTML = "";
+    return;
+  }
+
+  if (coachState.rateLimited) {
+    const rl = coachState.rateLimited;
+    el.innerHTML = `
+      <div class="plan-limit">
+        <p class="plan-limit-msg">
+          You've used ${rl.calls_used}/${rl.limit} coaching guides in the last 45 minutes.
+          Enter the PIN to unlock 5 more.
+        </p>
+        <div class="plan-unlock-row">
+          <input type="password" inputmode="numeric" class="plan-pin-input" id="coachPinInput" placeholder="PIN"
+                 ${coachState.unlockLoading ? "disabled" : ""}>
+          <button class="btn btn-primary" id="coachUnlockBtn" ${coachState.unlockLoading ? "disabled" : ""}>
+            ${coachState.unlockLoading ? "Checking…" : "Unlock +5"}
+          </button>
+        </div>
+        ${coachState.unlockError ? `<p class="plan-unlock-error">${escapeHtml(coachState.unlockError)}</p>` : ""}
+      </div>
+    `;
+    attachCoachPlanHandlers();
+    return;
+  }
+
+  if (coachState.planLoading) {
+    el.innerHTML = '<p class="chip-empty">Writing your game plan…</p>';
+    return;
+  }
+
+  if (coachState.planError) {
+    el.innerHTML = `
+      <p class="chip-empty">${escapeHtml(coachState.planError)}</p>
+      <button class="btn btn-ghost plan-btn" id="coachPlanBtn">Try again</button>
+    `;
+    attachCoachPlanHandlers();
+    return;
+  }
+
+  if (!coachState.plan) {
+    el.innerHTML = `<button class="btn btn-primary plan-btn" id="coachPlanBtn">Get coaching guide</button>`;
+    attachCoachPlanHandlers();
+    return;
+  }
+
+  const p = coachState.plan;
+  const open = coachState.detailOpen;
+  el.innerHTML = `
+    <div class="coach-plan">
+      <p class="plan-frame">${escapeHtml(p.frame)}</p>
+      <div class="plan-grid">
+        <div class="plan-block">
+          <p class="plan-label">Lane</p>
+          <p class="plan-text">${escapeHtml(p.lane.instruction)}</p>
+          <p class="plan-text plan-sub">First item — ${escapeHtml(p.lane.first_item)}</p>
+          <p class="plan-text plan-risk">${escapeHtml(p.lane.risk)}</p>
+        </div>
+        <div class="plan-block">
+          <p class="plan-label">Clock</p>
+          <p class="plan-text">${escapeHtml(p.clock.your_window)}</p>
+          <p class="plan-text plan-sub">Their spike — ${escapeHtml(p.clock.their_spike)}</p>
+        </div>
+      </div>
+      <p class="plan-wincon"><span class="plan-label">Wincon</span> ${escapeHtml(p.wincon)}</p>
+      <button class="plan-detail-toggle" id="planDetailToggle" aria-expanded="${open}">
+        <span>Full game plan</span>
+        <span class="plan-detail-chevron"></span>
+      </button>
+      ${
+        open
+          ? `
+        <div class="plan-detail">
+          <div class="plan-detail-row"><span class="plan-detail-stage">Early</span>${escapeHtml(p.detail.early)}</div>
+          <div class="plan-detail-row"><span class="plan-detail-stage">Mid</span>${escapeHtml(p.detail.mid)}</div>
+          <div class="plan-detail-row"><span class="plan-detail-stage">Late</span>${escapeHtml(p.detail.late)}</div>
+        </div>
+      `
+          : ""
+      }
+    </div>
+  `;
+  attachCoachPlanHandlers();
+}
+
+function attachCoachPlanHandlers() {
+  const btn = document.getElementById("coachPlanBtn");
+  if (btn) btn.addEventListener("click", requestCoachPlan);
+
+  const toggle = document.getElementById("planDetailToggle");
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      coachState.detailOpen = !coachState.detailOpen;
+      renderCoachPlan();
+    });
+  }
+
+  const unlockBtn = document.getElementById("coachUnlockBtn");
+  if (unlockBtn) unlockBtn.addEventListener("click", requestUnlock);
+
+  const pinInput = document.getElementById("coachPinInput");
+  if (pinInput) {
+    pinInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        requestUnlock();
+      }
+    });
+  }
+}
+
+function syncCoachRoleUI() {
+  document.querySelectorAll("#coachRoleTabs .role-pill").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.role === coachState.myRole);
+  });
+}
+
+function setupCoachRoleTabs() {
+  document.getElementById("coachRoleTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest(".role-pill");
+    if (!btn) return;
+    const role = btn.dataset.role;
+    coachState.myRole = coachState.myRole === role ? null : role;
+    syncCoachRoleUI();
+    resetCoachPlan();
+    renderCoachPlan();
+  });
+}
+
 function setupCoach() {
   syncCoachHeroValue();
+  syncCoachRoleUI();
+  setupCoachRoleTabs();
 
   setupCombo({
     comboId: "coachHeroCombo",
@@ -240,5 +471,4 @@ function setupCoach() {
       refreshCoach();
     },
   });
-
 }
