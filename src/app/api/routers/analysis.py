@@ -14,9 +14,11 @@ from app.api.db import get_conn
 from app.api.schemas.analysis import (
     DraftAnalysisRequest,
     DraftAnalysisResponse,
+    EnemyClock,
     PowerCurvePoint,
+    PredictedLane,
 )
-from app.engine.draft_context import bucket_label, build_context, load_bucket_stats
+from app.engine.draft_context import bucket_label, build_context, load_context_data
 
 router = APIRouter(prefix="/draft-analysis", tags=["draft-analysis"])
 
@@ -54,9 +56,9 @@ def get_draft_analysis(
     if unknown:
         raise HTTPException(status_code=404, detail=f"Unknown hero id(s): {unknown}")
 
-    stats = load_bucket_stats(conn, request.ally_picks + request.enemy_picks)
+    data = load_context_data(conn, request.ally_picks + request.enemy_picks)
     context = build_context(
-        request.my_hero_id, request.my_role, request.ally_picks, request.enemy_picks, stats
+        request.my_hero_id, request.my_role, request.ally_picks, request.enemy_picks, data
     )
 
     return DraftAnalysisResponse(
@@ -76,4 +78,21 @@ def get_draft_analysis(
         crossover_bucket=context.crossover_bucket,
         crossover_minutes=bucket_label(context.crossover_bucket) if context.crossover_bucket else None,
         tempo_verdict=context.tempo_verdict,
+        predicted_lane=PredictedLane(
+            lane=context.predicted_lane.lane,
+            with_heroes=context.predicted_lane.with_heroes,
+            vs_heroes=context.predicted_lane.vs_heroes,
+            matchup_delta=context.predicted_lane.matchup_delta,
+        ),
+        enemy_clocks=[
+            EnemyClock(
+                hero_id=c.hero_id,
+                hero_name=c.hero_name,
+                item_name=c.item_name,
+                median_minute=c.median_minute,
+            )
+            for c in context.enemy_clocks
+        ],
+        my_comp=context.my_comp,
+        their_comp=context.their_comp,
     )

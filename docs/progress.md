@@ -93,7 +93,11 @@ pushed to https://github.com/haquynhnguyen1818/dota2 (main).
   it once the role selector was removed, since the curve doesn't read it. Phase
   G re-collects it. Returns the power curve per duration bucket (`my_win_rate`,
   `their_win_rate`, `delta`), the `crossover_bucket`, and a `tempo_verdict`
-  of `you_are_faster`/`you_win_long`/`even`/`unknown`.
+  of `you_are_faster`/`you_win_long`/`even`/`unknown`. **Phase E4 added**
+  `predicted_lane` (which lane you're in, who's `with` you, who you're `vs`,
+  and the lane's `matchup_delta`), `enemy_clocks` (top 3 items per enemy hero
+  with median purchase minute), and `my_comp`/`their_comp` (capability tag
+  counts per team).
 
   **`my_hero_id` does not affect the curve** — the curve is your five heroes
   against their five, so changing which ally is "you" legitimately returns an
@@ -246,9 +250,29 @@ is confirmed working in production.
     Earthshaker timing. It also keeps junk — Wraith Band (2 min), Bracer
     (2 min), Greater Healing Lotus (39 min) are all terminal. E4 needs a
     better rule than this flag alone.
+- `load_hero_tags.py` — Post-draft coach, Phase E3/E4. Loads the hand-authored
+  `data/hero_tags.csv` (127 heroes × 10 capability booleans) → `hero_tags`.
+  Every cell must be an explicit `0` or `1`; a blank raises rather than being
+  read as false, since blank-vs-0 ambiguity is what makes a half-filled tag
+  column silently wrong. Deriving these tags from APIs was tried and
+  abandoned — see `coaching_plan.md` for which sources were rejected and why.
 - `load_players.py` — Phase 2 step 3. Parses the hand-curated `docs/players_id.txt` (`Name: account_id. Profile status: public|private.`) → `players` (all players, public and private). For players marked public only, fetches OpenDota `/players/{account_id}/heroes` → `player_hero_stats` (per-hero `games_played`/`wins`/`with_*`/`against_*`/`last_played`, zero-game rows skipped). Private profiles are recorded in `players` (so they're known) but no history is fetched for them — OpenDota returns all-zero data for private profiles anyway, and it'd just be wasted API calls. Stratz is *not* used for player history — see gotcha below.
 
 **Engine** (`src/app/engine/`):
+- `draft_context.py` — Post-draft coach, Phases B1 + E4. `build_context()` is
+  pure: it takes a `ContextData` bundle rather than a connection, so it
+  unit-tests with no DB (29 tests in `tests/`). `load_context_data()` holds all
+  the SQL. **Position assignment brute-forces all 5! = 120 permutations per
+  team** rather than assigning greedily — at this size exact is cheaper than
+  being clever, and greedy genuinely errs (it hands POSITION_5 to whoever has
+  the highest pos-5 share even when another hero has nowhere else to go).
+  Lanes: pos 1+5 = safelane, pos 2 = midlane, pos 3+4 = offlane; safelane faces
+  the enemy offlane, mid faces mid. `matchup_delta` is computed straight from
+  `stratz_hero_matchups` with log5 + `SHRINKAGE_K = 500`, **not** read from
+  `hero_matchup_advantage` — that table only covers heroes in the
+  Carry/Midlane/Offlane role lists (derived from `hero_role.csv`, scoped out of
+  the coach), so supports would be missing entirely. Baselines come from the
+  same table as the pair win rate, matching `01529a2`.
 - `compute_hero_matchup_advantage.py` — Objective 1. Builds `hero_matchup_advantage`: for each role list (Carry/Midlane/Offlane) and each possible opponent, ranks all heroes in that role by matchup advantage. Log5 (Bill James) expected-win-rate formula isolates matchup-specific edge from each hero's general form.
 - `draft_suggester.py` — Objective 2. Interactive CLI: prompts up to 5 of
   your own team's picks up front (`ally_picks`, Phase 2 step 2), then up to

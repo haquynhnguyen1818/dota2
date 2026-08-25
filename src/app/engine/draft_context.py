@@ -1,8 +1,14 @@
-"""Deterministic post-draft context: the power curve for a completed 5v5.
+"""Deterministic post-draft context for a completed 5v5.
 
-Phase B1 of docs/coaching_plan.md. No LLM, no DB — `build_context` is a pure
-function over hero duration stats so it can be unit-tested directly. Loading
-those stats is `load_bucket_stats`'s job, kept separate for that reason.
+Phases B1 and E4 of docs/coaching_plan.md. No LLM. `build_context` is a pure
+function over a `ContextData` bundle so it unit-tests without a DB; loading that
+bundle is `load_context_data`'s job, kept separate for exactly that reason.
+
+Signals, in the order they were built:
+  * `power_curve`  — each team's average win rate by game length (B1)
+  * `predicted_lane` — who you lane with and against, and the lane's edge (E4)
+  * `enemy_clocks` — when each enemy's key items land (E4)
+  * `my_comp` / `their_comp` — capability tag counts per team (E4)
 
 **The power curve is a heuristic, not a win probability.** It averages each
 team's five heroes' individual win rates at a given game length; hero
@@ -10,7 +16,7 @@ interaction effects are not in it at all (those live in `stratz_hero_matchups`
 and `stratz_hero_synergy`). Label it "power curve" in any UI, never "win
 chance".
 
-Note these win rates come from the `winWeek` population (via
+Note the curve's win rates come from the `winWeek` population (via
 `stratz_hero_duration_wr`), which is **not** the population behind `hero_wr` in
 `/draft-suggestions` — that one is `stratz_hero_matchups`, an
 interaction-filtered subset (see `01529a2`). The same hero can therefore read
@@ -19,7 +25,9 @@ slightly differently in the two panels; for flex/summon heroes the gap reaches
 also the right population for a duration question, being a uniform slice of
 all games — pooled across heroes, every bucket sits at exactly 50%.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from itertools import permutations
+import math
 
 import psycopg
 
@@ -43,8 +51,35 @@ TEMPO_EPSILON = 0.005
 
 TEAM_SIZE = 5
 
+POSITIONS = ["POSITION_1", "POSITION_2", "POSITION_3", "POSITION_4", "POSITION_5"]
+
+# Safelane faces the enemy offlane and vice versa; mid faces mid.
+LANE_BY_POSITION = {
+    "POSITION_1": "safelane", "POSITION_5": "safelane",
+    "POSITION_2": "midlane",
+    "POSITION_3": "offlane", "POSITION_4": "offlane",
+}
+OPPOSING_LANE = {"safelane": "offlane", "offlane": "safelane", "midlane": "midlane"}
+
+# Empirical-Bayes shrinkage, same constant and rationale as the draft suggester
+# (proj_obj.txt Phase 2 step 2): delta * n/(n+K) pulls small samples toward 0.
+SHRINKAGE_K = 500
+
+# Threat items: skip build-up components, skip anything bought in the opening
+# minutes, and keep the few a hero actually builds. See progress.md on why
+# is_component alone is not enough.
+CLOCK_MIN_MINUTE = 10
+CLOCKS_PER_HERO = 3
+
+TAGS = ["lockdown", "save", "dispel", "waveclear", "tower_dmg",
+        "silence", "break", "cheap_ult", "illusion", "summons"]
+
 # hero_id -> bucket -> (wins, games_played), already rolled up to the window.
 BucketStats = dict[int, dict[int, tuple[int, int]]]
+# hero_id -> position -> games_played
+PositionStats = dict[int, dict[str, int]]
+# (hero_id, vs_hero_id) -> (wins, games_played)
+MatchupStats = dict[tuple[int, int], tuple[int, int]]
 
 
 def bucket_label(bucket: int) -> str:
@@ -61,13 +96,50 @@ class CurvePoint:
 
 
 @dataclass(frozen=True)
+class ItemClock:
+    hero_id: int
+    hero_name: str
+    item_name: str
+    median_minute: int
+
+
+@dataclass(frozen=True)
+class PredictedLane:
+    lane: str | None
+    with_heroes: list[str]
+    vs_heroes: list[str]
+    matchup_delta: float | None
+
+
+@dataclass(frozen=True)
+class ContextData:
+    """Everything `build_context` reads. Defaults are empty so a test can supply
+    only the slice it cares about."""
+    buckets: BucketStats = field(default_factory=dict)
+    positions: PositionStats = field(default_factory=dict)
+    matchups: MatchupStats = field(default_factory=dict)
+    baselines: dict[int, float] = field(default_factory=dict)
+    clocks: dict[int, list[ItemClock]] = field(default_factory=dict)
+    tags: dict[int, dict[str, bool]] = field(default_factory=dict)
+    names: dict[int, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class DraftContext:
     my_hero_id: int
     my_role: str | None
     power_curve: list[CurvePoint]
     crossover_bucket: int | None
     tempo_verdict: str
+    predicted_lane: PredictedLane
+    enemy_clocks: list[ItemClock]
+    my_comp: dict[str, int]
+    their_comp: dict[str, int]
 
+
+# --------------------------------------------------------------------------
+# Power curve
+# --------------------------------------------------------------------------
 
 def _team_win_rate(team: list[int], bucket: int, stats: BucketStats) -> float | None:
     """Mean of the team's per-hero win rates in this bucket, or None if any hero lacks data.
@@ -122,12 +194,106 @@ def _tempo_verdict(curve: list[CurvePoint]) -> str:
     return "even"
 
 
+# --------------------------------------------------------------------------
+# Predicted lane
+# --------------------------------------------------------------------------
+
+def assign_positions(team: list[int], positions: PositionStats) -> dict[int, str]:
+    """Assign each hero a distinct position by maximum likelihood.
+
+    Brute-forces all 5! = 120 permutations rather than assigning greedily. At
+    this size exact is cheaper than being clever, and greedy genuinely errs —
+    it will hand POSITION_5 to the hero with the highest pos-5 share even when
+    another hero has nowhere else to go.
+    """
+    if not team:
+        return {}
+    shares = {}
+    for hero_id in team:
+        counts = positions.get(hero_id, {})
+        total = sum(counts.values())
+        shares[hero_id] = {
+            p: (counts.get(p, 0) / total if total else 1 / len(POSITIONS)) for p in POSITIONS
+        }
+
+    def score(order: tuple[str, ...]) -> float:
+        # log-likelihood; the floor keeps an unplayed position from vetoing an
+        # otherwise-best assignment outright
+        return sum(math.log(max(shares[h][p], 1e-9)) for h, p in zip(team, order))
+
+    best = max(permutations(POSITIONS), key=score)
+    return dict(zip(team, best))
+
+
+def _predicted_lane(
+    my_hero_id: int, ally_picks: list[int], enemy_picks: list[int], data: ContextData
+) -> PredictedLane:
+    ally_pos = assign_positions(ally_picks, data.positions)
+    enemy_pos = assign_positions(enemy_picks, data.positions)
+
+    my_lane = LANE_BY_POSITION.get(ally_pos.get(my_hero_id, ""))
+    if my_lane is None:
+        return PredictedLane(None, [], [], None)
+
+    with_ids = [h for h in ally_picks if h != my_hero_id and LANE_BY_POSITION[ally_pos[h]] == my_lane]
+    vs_ids = [h for h in enemy_picks if LANE_BY_POSITION[enemy_pos[h]] == OPPOSING_LANE[my_lane]]
+
+    return PredictedLane(
+        lane=my_lane,
+        with_heroes=[data.names.get(h, str(h)) for h in with_ids],
+        vs_heroes=[data.names.get(h, str(h)) for h in vs_ids],
+        matchup_delta=_lane_matchup_delta([my_hero_id, *with_ids], vs_ids, data),
+    )
+
+
+def _lane_matchup_delta(mine: list[int], theirs: list[int], data: ContextData) -> float | None:
+    """Mean shrunk log5 advantage across every my-lane x their-lane pair.
+
+    Computed straight from `stratz_hero_matchups` rather than read from
+    `hero_matchup_advantage`, because that table only covers heroes in the
+    Carry/Midlane/Offlane role lists — which come from `hero_role.csv`, which is
+    scoped out of the coach. Supports would otherwise be missing entirely.
+
+    Baselines come from the same table as the pair win rate, matching the fix in
+    `01529a2`: log5 only isolates a real matchup residual when its baseline is
+    computed on the same population.
+    """
+    deltas = []
+    for a in mine:
+        for b in theirs:
+            pair = data.matchups.get((a, b))
+            wr_a, wr_b = data.baselines.get(a), data.baselines.get(b)
+            if pair is None or wr_a is None or wr_b is None:
+                continue
+            wins, games = pair
+            if games == 0:
+                continue
+            denominator = wr_a * (1 - wr_b) + (1 - wr_a) * wr_b
+            if denominator == 0:
+                continue
+            expected = wr_a * (1 - wr_b) / denominator
+            raw = wins / games - expected
+            deltas.append(raw * (games / (games + SHRINKAGE_K)))
+    return sum(deltas) / len(deltas) if deltas else None
+
+
+# --------------------------------------------------------------------------
+# Comp tags
+# --------------------------------------------------------------------------
+
+def _comp(team: list[int], tags: dict[int, dict[str, bool]]) -> dict[str, int]:
+    """How many heroes on this team carry each capability."""
+    return {tag: sum(1 for h in team if tags.get(h, {}).get(tag)) for tag in TAGS}
+
+
+# --------------------------------------------------------------------------
+
 def build_context(
     my_hero_id: int,
     my_role: str | None,
     ally_picks: list[int],
     enemy_picks: list[int],
-    stats: BucketStats,
+    data: ContextData,
 ) -> DraftContext:
     if len(ally_picks) != TEAM_SIZE or len(enemy_picks) != TEAM_SIZE:
         raise ValueError(f"ally_picks and enemy_picks must each contain {TEAM_SIZE} hero ids")
@@ -136,8 +302,8 @@ def build_context(
 
     curve = []
     for bucket in CHART_BUCKETS:
-        mine = _team_win_rate(ally_picks, bucket, stats)
-        theirs = _team_win_rate(enemy_picks, bucket, stats)
+        mine = _team_win_rate(ally_picks, bucket, data.buckets)
+        theirs = _team_win_rate(enemy_picks, bucket, data.buckets)
         if mine is None or theirs is None:
             continue
         curve.append(
@@ -156,8 +322,16 @@ def build_context(
         power_curve=curve,
         crossover_bucket=_crossover(curve),
         tempo_verdict=_tempo_verdict(curve),
+        predicted_lane=_predicted_lane(my_hero_id, ally_picks, enemy_picks, data),
+        enemy_clocks=[c for h in enemy_picks for c in data.clocks.get(h, [])],
+        my_comp=_comp(ally_picks, data.tags),
+        their_comp=_comp(enemy_picks, data.tags),
     )
 
+
+# --------------------------------------------------------------------------
+# Loading
+# --------------------------------------------------------------------------
 
 LOAD_BUCKET_STATS = """
 WITH recent AS (
@@ -171,15 +345,114 @@ WHERE wk <= %s AND hero_id = ANY(%s)
 GROUP BY hero_id, duration_bucket
 """
 
+LOAD_POSITIONS = """
+WITH recent AS (
+    SELECT hero_id, position, games_played,
+           DENSE_RANK() OVER (ORDER BY week DESC) AS wk
+    FROM stratz_hero_positions
+)
+SELECT hero_id, position, SUM(games_played)
+FROM recent
+WHERE wk <= %s AND hero_id = ANY(%s)
+GROUP BY hero_id, position
+"""
 
-def load_bucket_stats(conn: psycopg.Connection, hero_ids: list[int], weeks: int = 2) -> BucketStats:
-    """Roll `stratz_hero_duration_wr` up to the latest `weeks` weeks.
+LOAD_MATCHUPS = """
+SELECT hero_id, vs_hero_id, wins, games_played
+FROM stratz_hero_matchups
+WHERE hero_id = ANY(%s) AND vs_hero_id = ANY(%s)
+"""
 
-    DENSE_RANK, not ROW_NUMBER: this table has 14 rows per hero-week, so
-    ROW_NUMBER <= 2 would return two duration buckets of a single week. See
-    docs/progress.md.
+LOAD_BASELINES = """
+SELECT hero_id, SUM(wins)::numeric / SUM(games_played)
+FROM stratz_hero_matchups
+WHERE hero_id = ANY(%s)
+GROUP BY hero_id
+"""
+
+LOAD_CLOCKS = """
+WITH recent AS (
+    SELECT hero_id, item_id, minute, games_played,
+           DENSE_RANK() OVER (ORDER BY week DESC) AS wk
+    FROM stratz_hero_item_purchase
+    WHERE instance = 0
+),
+agg AS (
+    SELECT hero_id, item_id, minute, SUM(games_played) AS n
+    FROM recent WHERE wk <= %(weeks)s AND hero_id = ANY(%(heroes)s)
+    GROUP BY hero_id, item_id, minute
+),
+totals AS (SELECT hero_id, item_id, SUM(n) AS total FROM agg GROUP BY hero_id, item_id),
+cumulative AS (
+    SELECT a.hero_id, a.item_id, a.minute, t.total,
+           SUM(a.n) OVER (PARTITION BY a.hero_id, a.item_id ORDER BY a.minute) AS running
+    FROM agg a JOIN totals t USING (hero_id, item_id)
+),
+median AS (
+    SELECT hero_id, item_id, MIN(minute) AS median_minute, MAX(total) AS total
+    FROM cumulative WHERE running >= total / 2.0
+    GROUP BY hero_id, item_id
+),
+ranked AS (
+    SELECT m.hero_id, m.item_id, m.median_minute, m.total,
+           ROW_NUMBER() OVER (PARTITION BY m.hero_id ORDER BY m.total DESC) AS rn
+    FROM median m JOIN stratz_items i ON i.id = m.item_id
+    WHERE NOT i.is_component AND m.median_minute >= %(min_minute)s
+)
+SELECT hero_id, item_id, median_minute FROM ranked WHERE rn <= %(per_hero)s
+ORDER BY hero_id, median_minute
+"""
+
+_TAG_COLUMNS = ", ".join('"' + t + '"' for t in TAGS)
+LOAD_TAGS = f"SELECT hero_id, {_TAG_COLUMNS} FROM hero_tags WHERE hero_id = ANY(%s)"
+
+
+def load_context_data(conn: psycopg.Connection, hero_ids: list[int], weeks: int = 2) -> ContextData:
+    """Load every signal `build_context` needs for these ten heroes.
+
+    All the "latest N weeks" rollups use DENSE_RANK, not ROW_NUMBER: these
+    tables hold many rows per hero-week (14 duration buckets, 5 positions, one
+    row per item-minute), so ROW_NUMBER would return a slice of a single week.
+    See docs/progress.md.
     """
-    stats: BucketStats = {}
-    for hero_id, bucket, wins, games_played in conn.execute(LOAD_BUCKET_STATS, (weeks, hero_ids)):
-        stats.setdefault(hero_id, {})[bucket] = (int(wins), int(games_played))
-    return stats
+    buckets: BucketStats = {}
+    for hero_id, bucket, wins, games in conn.execute(LOAD_BUCKET_STATS, (weeks, hero_ids)):
+        buckets.setdefault(hero_id, {})[bucket] = (int(wins), int(games))
+
+    positions: PositionStats = {}
+    for hero_id, position, games in conn.execute(LOAD_POSITIONS, (weeks, hero_ids)):
+        positions.setdefault(hero_id, {})[position] = int(games)
+
+    matchups: MatchupStats = {
+        (a, b): (int(wins), int(games))
+        for a, b, wins, games in conn.execute(LOAD_MATCHUPS, (hero_ids, hero_ids))
+    }
+    baselines = {h: float(wr) for h, wr in conn.execute(LOAD_BASELINES, (hero_ids,))}
+
+    names = dict(conn.execute("SELECT id, localized_name FROM heroes WHERE id = ANY(%s)", (hero_ids,)))
+    item_names = dict(conn.execute("SELECT id, display_name FROM stratz_items"))
+
+    clocks: dict[int, list[ItemClock]] = {}
+    rows = conn.execute(
+        LOAD_CLOCKS,
+        {"weeks": weeks, "heroes": hero_ids, "min_minute": CLOCK_MIN_MINUTE, "per_hero": CLOCKS_PER_HERO},
+    )
+    for hero_id, item_id, median_minute in rows:
+        clocks.setdefault(hero_id, []).append(
+            ItemClock(
+                hero_id=hero_id,
+                hero_name=names.get(hero_id, str(hero_id)),
+                item_name=item_names.get(item_id) or str(item_id),
+                median_minute=int(median_minute),
+            )
+        )
+
+    tags = {
+        row[0]: dict(zip(TAGS, row[1:]))
+        for row in conn.execute(LOAD_TAGS, (hero_ids,))
+    }
+
+    return ContextData(
+        buckets=buckets, positions=positions, matchups=matchups, baselines=baselines,
+        clocks=clocks, tags=tags, names=names,
+    )
