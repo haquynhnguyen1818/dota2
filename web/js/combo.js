@@ -27,11 +27,11 @@ function setupCombo({ comboId, triggerId, panelId, listId, clearId, valueId, sea
   function open() {
     combo.classList.add("open");
     trigger.setAttribute("aria-expanded", "true");
-    renderOptions(searchEl ? searchEl.value : "");
     if (searchEl) {
-      searchEl.value = "";
+      searchEl.value = ""; // clear first: rendering before this leaves the previous search's filter on the list
       setTimeout(() => searchEl.focus(), 10);
     }
+    renderOptions("");
   }
   function close() {
     combo.classList.remove("open");

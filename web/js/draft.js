@@ -5,9 +5,7 @@ const state = {
   nameById: {},
   idByName: {},
   opponentPicks: [],
-  pendingPickName: null,
   allyPicks: [],
-  pendingAllyPickName: null,
   players: [],
   accountIdByName: {},
   playerName: null,
@@ -41,22 +39,14 @@ function renderChips() {
 }
 
 function syncHeroPickValue() {
-  const el = document.getElementById("heroPickValue");
-  el.textContent = state.pendingPickName || "Select hero…";
-  el.classList.toggle("placeholder", !state.pendingPickName);
-  updateAddBtnState();
+  document.getElementById("heroPickValue").textContent =
+    state.opponentPicks.length >= MAX_PICKS ? `Max ${MAX_PICKS} picks` : "Select hero…";
 }
 
-function updateAddBtnState() {
-  document.getElementById("addBtn").disabled = !state.pendingPickName || state.opponentPicks.length >= MAX_PICKS;
-}
-
-async function onAddPick() {
-  if (!state.pendingPickName) return;
-  const id = state.idByName[state.pendingPickName];
+async function onAddPick(name) {
+  const id = state.idByName[name];
   if (!id) return;
   state.opponentPicks.push(id);
-  state.pendingPickName = null;
   syncHeroPickValue();
   renderChips();
   await refreshSuggestions();
@@ -71,7 +61,6 @@ async function removePick(id) {
 
 async function onReset() {
   state.opponentPicks = [];
-  state.pendingPickName = null;
   syncHeroPickValue();
   renderChips();
   await refreshSuggestions();
@@ -98,23 +87,14 @@ function renderAllyChips() {
 }
 
 function syncAllyPickValue() {
-  const el = document.getElementById("allyPickValue");
-  el.textContent = state.pendingAllyPickName || "Select hero…";
-  el.classList.toggle("placeholder", !state.pendingAllyPickName);
-  updateAllyAddBtnState();
+  document.getElementById("allyPickValue").textContent =
+    state.allyPicks.length >= MAX_PICKS ? `Max ${MAX_PICKS} picks` : "Select hero…";
 }
 
-function updateAllyAddBtnState() {
-  document.getElementById("allyAddBtn").disabled =
-    !state.pendingAllyPickName || state.allyPicks.length >= MAX_PICKS;
-}
-
-async function onAddAllyPick() {
-  if (!state.pendingAllyPickName) return;
-  const id = state.idByName[state.pendingAllyPickName];
+async function onAddAllyPick(name) {
+  const id = state.idByName[name];
   if (!id) return;
   state.allyPicks.push(id);
-  state.pendingAllyPickName = null;
   syncAllyPickValue();
   renderAllyChips();
   await refreshSuggestions();
@@ -129,7 +109,6 @@ async function removeAllyPick(id) {
 
 async function onAllyReset() {
   state.allyPicks = [];
-  state.pendingAllyPickName = null;
   syncAllyPickValue();
   renderAllyChips();
   await refreshSuggestions();
@@ -330,23 +309,17 @@ async function init() {
     triggerId: "heroPickTrigger",
     panelId: "heroPickPanel",
     listId: "heroPickList",
-    clearId: "heroPickClear",
     valueId: "heroPickValue",
     searchId: "heroPickSearch",
     options: () =>
-      state.heroes
-        .filter((h) => !state.opponentPicks.includes(h.id) && !state.allyPicks.includes(h.id))
-        .map((h) => h.name)
-        .sort((a, b) => a.localeCompare(b)),
-    getValue: () => state.pendingPickName,
-    onSelect: (v) => {
-      state.pendingPickName = v;
-      syncHeroPickValue();
-    },
-    onClear: () => {
-      state.pendingPickName = null;
-      syncHeroPickValue();
-    },
+      state.opponentPicks.length >= MAX_PICKS
+        ? []
+        : state.heroes
+            .filter((h) => !state.opponentPicks.includes(h.id) && !state.allyPicks.includes(h.id))
+            .map((h) => h.name)
+            .sort((a, b) => a.localeCompare(b)),
+    getValue: () => null,
+    onSelect: onAddPick,
   });
 
   setupCombo({
@@ -354,23 +327,17 @@ async function init() {
     triggerId: "allyPickTrigger",
     panelId: "allyPickPanel",
     listId: "allyPickList",
-    clearId: "allyPickClear",
     valueId: "allyPickValue",
     searchId: "allyPickSearch",
     options: () =>
-      state.heroes
-        .filter((h) => !state.allyPicks.includes(h.id) && !state.opponentPicks.includes(h.id))
-        .map((h) => h.name)
-        .sort((a, b) => a.localeCompare(b)),
-    getValue: () => state.pendingAllyPickName,
-    onSelect: (v) => {
-      state.pendingAllyPickName = v;
-      syncAllyPickValue();
-    },
-    onClear: () => {
-      state.pendingAllyPickName = null;
-      syncAllyPickValue();
-    },
+      state.allyPicks.length >= MAX_PICKS
+        ? []
+        : state.heroes
+            .filter((h) => !state.allyPicks.includes(h.id) && !state.opponentPicks.includes(h.id))
+            .map((h) => h.name)
+            .sort((a, b) => a.localeCompare(b)),
+    getValue: () => null,
+    onSelect: onAddAllyPick,
   });
 
   setupCombo({
@@ -386,9 +353,7 @@ async function init() {
     onClear: onPlayerClear,
   });
 
-  document.getElementById("addBtn").addEventListener("click", onAddPick);
   document.getElementById("resetBtn").addEventListener("click", onReset);
-  document.getElementById("allyAddBtn").addEventListener("click", onAddAllyPick);
   document.getElementById("allyResetBtn").addEventListener("click", onAllyReset);
   document.getElementById("tabs").addEventListener("click", onTabClick);
   document.querySelectorAll(".seg-btn").forEach((btn) => btn.addEventListener("click", onSegClick));
