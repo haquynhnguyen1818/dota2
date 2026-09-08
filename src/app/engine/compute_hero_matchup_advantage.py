@@ -1,4 +1,4 @@
-"""Rank hero-vs-opponent matchup advantage per role (Carry/Midlane/Offlane).
+"""Rank hero-vs-opponent matchup advantage per role (Carry/Midlane/Offlane/Supports).
 
 For each opponent, ranks all heroes in a role list from best matchup
 (rank 1) to worst, using log5 (Bill James) expected win rate to isolate
@@ -48,7 +48,7 @@ role_heroes AS (
     SELECT hr.hero_id, r.role_name
     FROM hero_roles_csv_import hr
     JOIN roles_csv_import r ON r.role_id = hr.role_id
-    WHERE r.role_name IN ('Carry', 'Midlane', 'Offlane')
+    WHERE r.role_name IN ('Carry', 'Midlane', 'Offlane', 'Supports')
 ),
 matchup_calc AS (
     SELECT

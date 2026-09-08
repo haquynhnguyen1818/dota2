@@ -32,7 +32,7 @@ from app.api.schemas.draft import (
 
 router = APIRouter(prefix="/draft-suggestions", tags=["draft-suggestions"])
 
-ROLES = ["Carry", "Midlane", "Offlane"]
+ROLES = ["Carry", "Midlane", "Offlane", "Supports"]
 MAX_PICKS = 5
 TOP_N_BEST = 20
 TOP_N_WORST = 10
