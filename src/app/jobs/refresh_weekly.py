@@ -23,9 +23,13 @@ a Stratz loader from a laptop re-binds it and breaks the next cron run.
 Ordering matters in one place -- `compute_hero_matchup_advantage` rebuilds a
 derived table and must run after the matchup and win-week loaders that feed it.
 
-The two hand-authored CSV loaders (`load_heroes_roles`, `load_hero_tags`) are
-deliberately absent: they only change when the file changes, which is a manual
-act, and re-reading them weekly would just be noise in the log.
+The two hand-curated loaders (`load_heroes_roles`, `load_hero_tags`) are
+deliberately absent: they only change when their source changes, which is a
+manual act, and re-reading them weekly would just be noise in the log.
+`load_heroes_roles` now reads a Google Sheet rather than a checked-in file, so
+a sheet edit reaches production only when someone runs that loader **and then
+`compute_hero_matchup_advantage`** -- the API reads the derived table, so the
+role load alone changes nothing user-visible.
 """
 import sys
 import time
