@@ -9,7 +9,7 @@ COPY src/ src/
 # loaders read these by path. Listed individually rather than copying data/ and
 # docs/ wholesale, which would drag the UI mockups and OpenDota's schema dump
 # into a runtime image.
-COPY data/hero_role.csv data/hero_tags.csv data/
+COPY data/hero_tags.csv data/
 COPY docs/players_id.txt docs/
 
 RUN pip install --no-cache-dir -e .
