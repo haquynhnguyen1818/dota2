@@ -1,12 +1,19 @@
-"""Load hero role assignments from hero_role.csv into Postgres."""
+"""Load hero role assignments from the hero-role Google Sheet into Postgres."""
 import csv
-from pathlib import Path
+import io
 
 import psycopg
+import requests
 
 from app.credentials import db_kwargs
 
-HERO_ROLE_CSV = Path(__file__).resolve().parents[3] / "data" / "hero_role.csv"
+# The hand-curated hero -> role sheet, readable by anyone with the link.
+# `export?format=csv` serves its first tab. This replaced `data/hero_role.csv`,
+# which was deleted so there is only one source to edit.
+HERO_ROLE_SHEET_CSV = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1OH3IBksFy66GDTGgyuh9U0CsjbI-98DTns1lZYY1Hmw/export?format=csv"
+)
 
 CREATE_ROLES_TABLE = """
 CREATE TABLE IF NOT EXISTS roles_csv_import (
@@ -25,8 +32,9 @@ CREATE TABLE IF NOT EXISTS hero_roles_csv_import (
 
 
 def main() -> None:
-    with open(HERO_ROLE_CSV, newline="", encoding="utf-8-sig") as f:
-        rows = list(csv.DictReader(f))
+    resp = requests.get(HERO_ROLE_SHEET_CSV, timeout=30)
+    resp.raise_for_status()
+    rows = list(csv.DictReader(io.StringIO(resp.content.decode("utf-8-sig"))))
 
     role_names = sorted({row["Role"] for row in rows})
     pairs = sorted({(int(row["hero_id"]), row["Role"]) for row in rows})
