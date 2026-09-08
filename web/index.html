@@ -22,29 +22,6 @@
     <a href="matchup.html">Matchup Advantage</a>
   </nav>
 
-  <!-- Opponent picks -->
-  <div class="card">
-    <p class="eyebrow">Opponent picks</p>
-    <div class="chips" id="chips"></div>
-    <div class="add-row">
-      <div class="select-wrap">
-        <div class="combo" id="heroPickCombo">
-          <div class="combo-trigger" id="heroPickTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Select hero to add">
-            <span class="combo-value placeholder" id="heroPickValue">Select hero…</span>
-            <span class="combo-icons">
-              <span class="combo-chevron"></span>
-            </span>
-          </div>
-          <div class="combo-panel" id="heroPickPanel" role="listbox">
-            <input class="combo-search" id="heroPickSearch" type="text" placeholder="Search hero…">
-            <div class="combo-list" id="heroPickList"></div>
-          </div>
-        </div>
-      </div>
-      <button class="btn btn-ghost" id="resetBtn">Reset</button>
-    </div>
-  </div>
-
   <!-- Ally picks -->
   <div class="card">
     <p class="eyebrow">Your team's picks (optional)</p>
@@ -65,6 +42,29 @@
         </div>
       </div>
       <button class="btn btn-ghost" id="allyResetBtn">Reset</button>
+    </div>
+  </div>
+
+  <!-- Opponent picks -->
+  <div class="card">
+    <p class="eyebrow">Opponent picks</p>
+    <div class="chips" id="chips"></div>
+    <div class="add-row">
+      <div class="select-wrap">
+        <div class="combo" id="heroPickCombo">
+          <div class="combo-trigger" id="heroPickTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Select hero to add">
+            <span class="combo-value placeholder" id="heroPickValue">Select hero…</span>
+            <span class="combo-icons">
+              <span class="combo-chevron"></span>
+            </span>
+          </div>
+          <div class="combo-panel" id="heroPickPanel" role="listbox">
+            <input class="combo-search" id="heroPickSearch" type="text" placeholder="Search hero…">
+            <div class="combo-list" id="heroPickList"></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-ghost" id="resetBtn">Reset</button>
     </div>
   </div>
 
