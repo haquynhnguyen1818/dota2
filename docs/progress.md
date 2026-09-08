@@ -115,12 +115,17 @@ inside `web/`, then open `index.html`/`matchup.html`. Talks to the API via
 `fetch()` in `js/api.js`; `js/config.js` holds `API_BASE_URL` — update it
 before deploying. Two pages, dark "Draft Terminal" theme matching
 `data/draft-terminal.html`:
-- `index.html` (`js/draft.js`) — Objective 2. Opponent picks as removable
-  chips (native flexbox `flex-wrap`, no framework needed — sizes to content
-  and wraps on overflow for free, unlike the Streamlit version which needed
-  a CSS workaround for the same thing), added via the same searchable
+- `index.html` (`js/draft.js`) — Objective 2. Ally and opponent picks as
+  removable chips (native flexbox `flex-wrap`, no framework needed — sizes to
+  content and wraps on overflow for free, unlike the Streamlit version which
+  needed a CSS workaround for the same thing), added via the same searchable
   combobox as the matchup page (see `js/combo.js` below) rather than a plain
-  `<select>`. Carry/Midlane/Offlane tabs. **Top best returns 20 from the API
+  `<select>`. **Selecting a hero in the combobox adds it immediately** — there
+  is no "Add pick" button and no pending-selection state; the 5-pick cap is
+  enforced by the option list going empty and the trigger reading "Max 5
+  picks". Your team's picks card sits above the opponent picks card.
+  Carry/Midlane/Offlane/Supports tabs (the Supports tab shows as
+  "Support"). **Top best returns 20 from the API
   (`TOP_N_BEST` in `api/routers/draft.py`) but the page only renders the
   first 10 by default, with a "Show all 20 heroes" button to expand — top
   worst stays at 10 (`TOP_N_WORST`), no pagination there.** Both lists show a
@@ -164,6 +169,10 @@ before deploying. Two pages, dark "Draft Terminal" theme matching
   both pages; `options` can be a static array or a callback (draft.js uses a
   callback so the hero-picker's option list stays live-filtered against
   `opponentPicks` without re-initializing the combo on every add/remove).
+  `open()` must blank `searchEl.value` *before* calling `renderOptions("")` —
+  rendering first showed the previous search's filter beside an empty search
+  box, which became visible on every pick once selecting a hero started
+  adding it directly.
 - `matchup.html` (`js/matchup.js`) — Objective 1, matches
   `data/matchup-advantage.html`'s mockup (also untouched, kept as reference):
   searchable combobox selectors (custom, not native `<select>` — supports
@@ -218,8 +227,9 @@ is confirmed working in production.
   `heroStats.stats(groupByPosition: true)` → `stratz_hero_positions`
   (`hero_id`, `week`, `position`, `games_played`, `wins`; PK on the first
   three). 1,270 rows = 127 heroes × 2 weeks × 5 positions, dense. 1 call per
-  week. **This is the coach's only position source** — `hero_role.csv` stays
-  scoped to the pick-suggester (user decision). Sanity-checked: Anti-Mage 92%
+  week. **This is the coach's only position source** — the hand-curated
+  hero-role sheet stays scoped to the pick-suggester (user decision).
+  Sanity-checked: Anti-Mage 92%
   POSITION_1, Crystal Maiden 71% POSITION_5, Invoker 70% POSITION_2, with
   Pudge and Earthshaker correctly reading as flexible (~34% top position).
   ⚠️ **`stats` is a parsed-match subset** (~31% of `winWeek`'s volume — positions
@@ -349,11 +359,14 @@ machine. Thirteen modules carried the same duplicated 7-line
   Lanes: pos 1+5 = safelane, pos 2 = midlane, pos 3+4 = offlane; safelane faces
   the enemy offlane, mid faces mid. `matchup_delta` is computed straight from
   `stratz_hero_matchups` with log5 + `SHRINKAGE_K = 500`, **not** read from
-  `hero_matchup_advantage` — that table only covers heroes in the
-  Carry/Midlane/Offlane role lists (derived from `hero_role.csv`, scoped out of
-  the coach), so supports would be missing entirely. Baselines come from the
-  same table as the pair win rate, matching `01529a2`.
-- `compute_hero_matchup_advantage.py` — Objective 1. Builds `hero_matchup_advantage`: for each role list (Carry/Midlane/Offlane) and each possible opponent, ranks all heroes in that role by matchup advantage. Log5 (Bill James) expected-win-rate formula isolates matchup-specific edge from each hero's general form.
+  `hero_matchup_advantage`. The original reason was that the table only
+  covered the Carry/Midlane/Offlane role lists, so supports would be missing
+  entirely; **that gap is now closed** — the table gained a Supports role list
+  on 2026-09-08 (see `compute_hero_matchup_advantage.py` below). The coach
+  still computes its own delta because it wants a per-pair lane number rather
+  than a role-scoped ranking. Baselines come from the same table as the pair
+  win rate, matching `01529a2`.
+- `compute_hero_matchup_advantage.py` — Objective 1. Builds `hero_matchup_advantage`: for each role list (Carry/Midlane/Offlane/Supports — Supports added 2026-09-08 to give the web UI a fourth tab) and each possible opponent, ranks all heroes in that role by matchup advantage. Log5 (Bill James) expected-win-rate formula isolates matchup-specific edge from each hero's general form.
 - `draft_suggester.py` — Objective 2. Interactive CLI: prompts up to 5 of
   your own team's picks up front (`ally_picks`, Phase 2 step 2), then up to
   5 enemy picks one at a time, get top-10-best/worst per role after each
@@ -530,19 +543,27 @@ import ...` resolves from any CWD.
   after a couple of false starts (partition by hero_id was tried and
   reverted) — verified against the user's own sample data before landing
   here. Don't flip this without re-confirming against a sample.
-- **Supports never overlap with Carry/Midlane/Offlane** in
-  `hero_roles_csv_import` — verified empirically, which is why
-  `draft_suggester.py` can use a simple binary Support/non-Support check
-  for the 0.8/1.0 weight.
+- **Supports used to never overlap with Carry/Midlane/Offlane in
+  `hero_roles_csv_import`; as of the 2026-09-08 sheet load they do.** Ten
+  heroes now carry Supports *and* another role — Windranger (all four),
+  Pudge (Mid/Off/Supports), and Abaddon, Bounty Hunter, Clockwerk,
+  Earthshaker, Elder Titan, Hoodwink, Marci, Undying (Offlane+Supports).
+  The old non-overlap is what justified the simple binary Support/non-Support
+  check behind the 0.8/1.0 opponent weight in both `draft_suggester.py` and
+  `api/routers/draft.py`. That check still runs, so **an opponent pick of any
+  of those ten flex heroes is now weighted 0.8** rather than 1.0. Not yet
+  decided whether that is wanted; revisit before trusting small scoring
+  differences on drafts containing them.
 - When the user says a ranking or number "looks off," pull the exact row
   they're questioning and cross-check every intermediate value (games_played,
   wins, hero_wr, etc.) against the live DB before assuming a logic bug —
   more than once the real cause was Stratz's rolling data window having
   moved between when the user pulled a reference sample and when the query
   re-ran, not a formula error.
-- `hero_role.csv`'s `hero_id` column maps directly to `heroes.id` /
-  `stratz_heroes.id` (Valve's hero IDs) — confirmed 1:1, only 3 harmless
-  name-casing mismatches (e.g. "BeastMaster" vs "Beastmaster").
+- The hero-role sheet's `hero_id` column (formerly `hero_role.csv`) maps
+  directly to `heroes.id` / `stratz_heroes.id` (Valve's hero IDs) — confirmed
+  1:1, only 3 harmless name-casing mismatches (e.g. "BeastMaster" vs
+  "Beastmaster").
 - **`stratz_hero_synergy` is directional and the two directions don't
   perfectly agree.** Querying `matchUp(heroIds:[1,50]).with` from hero 1's
   row gives a slightly different `matchCount`/`winCount` for the (1, 50)
@@ -615,10 +636,13 @@ import ...` resolves from any CWD.
 - **`players_id.txt` is the source of truth for who to pull and whether
   they're public**, parsed directly by `load_players.py` (regex on the
   `Name: account_id. Profile status: public|private.` format) — no
-  duplicate CSV was created under `data/` for this, unlike `hero_role.csv`,
-  since the source file already lives in a fixed, simple format. Re-run
-  `load_players.py` after the user updates a player's status in that file
-  to public.
+  duplicate CSV was created under `data/` for this, unlike the old
+  `hero_role.csv`, since the source file already lives in a fixed, simple
+  format. Unlike the hero roles it has **not** moved to a Google Sheet — it is
+  still a checked-in file, and `infra/docker/api.Dockerfile` copies it into the
+  image, so editing it needs an image rebuild before the loader sees the
+  change. Re-run `load_players.py` after the user updates a player's status
+  in that file to public.
 - **Phase 2 step 4 — personal history is annotate-only, not a scoring
   signal.** Presented 3 options (blend into `total_advantage` like synergy,
   filter candidates to the player's hero pool, or annotate without
@@ -652,7 +676,9 @@ import ...` resolves from any CWD.
   surfaces again (e.g. from an old branch or backup), don't recommit it,
   and treat that Stratz token as compromised if it's ever found committed
   anywhere in history.
-- King Arthas and Parma (`docs/players_id.txt`) are still marked private —
-  no `player_hero_stats` for them yet. Once the user updates that file to
-  public, re-run `load_players.py` and they'll show up in `GET /players`
-  and the web UI's player selector automatically, no code changes needed.
+- Parma (`docs/players_id.txt`) is still marked private — no
+  `player_hero_stats` for them. Once the user updates that file to public,
+  rebuild the api image (the Dockerfile bakes `players_id.txt` in) and re-run
+  `load_players.py`; they'll then show up in `GET /players` and the web UI's
+  player selector automatically, no code changes needed. King Arthas went
+  public on 2026-09-08 and was loaded this way — 26 heroes, 255 games.
