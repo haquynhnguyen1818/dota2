@@ -24,6 +24,9 @@ function hmRowHTML(item, idx, isBest) {
   const tier = (isBest && item.advantage > 0) || (!isBest && item.advantage < 0) ? "tier-signal" : "";
   const barPct = Math.min(Math.abs(item.advantage * 100) / HM_SCALE_MAX, 1) * 50;
   const valueText = (item.advantage >= 0 ? "+" : "") + (item.advantage * 100).toFixed(2) + "%";
+  // wr_a_b -- this hero's win rate in this specific matchup. Labelled just "WR"
+  // because the suffix wrapped to a second line in the narrow two-column layout;
+  // the list head carries the meaning instead.
   const wrPct = item.wr_a_b * 100;
   const wrClass = wrPct >= 50 ? "wr-good" : "";
   return `
@@ -31,7 +34,7 @@ function hmRowHTML(item, idx, isBest) {
       <div class="row-rank">${String(idx + 1).padStart(2, "0")}</div>
       <div class="row-main">
         <div class="row-name" title="${item.vs_hero_name}">${item.vs_hero_name}</div>
-        <div class="row-wr ${wrClass}">WR ${wrPct.toFixed(2)}% vs them</div>
+        <div class="row-wr ${wrClass}">WR ${wrPct.toFixed(2)}%</div>
       </div>
       <div class="row-bar-track">
         <div class="row-bar ${sign}" style="width:${barPct}%;"></div>
