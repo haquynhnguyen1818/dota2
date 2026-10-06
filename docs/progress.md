@@ -68,6 +68,20 @@ pushed to https://github.com/haquynhnguyen1818/dota2 (main).
 - `GET /heroes` — all hero id/name pairs.
 - `GET /matchup-advantage/{role}/{vs_hero_id}` — Objective 1, full ranked
   list for a role vs. one opponent, wraps `hero_matchup_advantage`.
+- `GET /hero-matchups/{hero_id}` — the **transpose** of the above: fixes a hero
+  and ranks all 126 opponents, returning the hero's own `hero_wr` plus a
+  `matchups` list sorted by `advantage` descending. Reads the same
+  `hero_matchup_advantage` rows — no new computation, and
+  `compute_hero_matchup_advantage.py` is untouched. Takes **no role input**:
+  the table's PK is (role_name, hero_id, vs_hero_id), but only `rank_vs_hero`
+  is role-scoped — `advantage`, `wr_a_b` and both baselines have no role term,
+  verified on production (of all (hero_id, vs_hero_id) pairs, **zero** have
+  more than one distinct `advantage`), so `DISTINCT ON (vs_hero_id)` collapses
+  the per-role duplicates losslessly. `rank_vs_hero` is deliberately **not**
+  returned — it ranks a role list against a fixed opponent, the wrong axis
+  here, and would read as "this hero's rank" when it is nothing of the kind.
+  404s on an unknown hero id, and on a hero in no role list (unreachable today:
+  all 127 heroes have exactly 126 opponents).
 - `POST /draft-suggestions` — Objective 2, body `{"opponent_picks": [id,...],
   "ally_picks": [id,...]}` (`opponent_picks` 1-5 ids required, no dupes;
   `ally_picks` 0-5 ids optional, no dupes, must not overlap
@@ -178,17 +192,45 @@ before deploying. Two pages, dark "Draft Terminal" theme matching
   searchable combobox selectors (custom, not native `<select>` — supports
   typeahead filtering and a clear/× button) for role and opponent hero, a
   context strip showing the opponent's own baseline WR, and a paginated
-  ranked list (`Show all N heroes` / `Show top 10 only`). Role options are
-  hardcoded to the 3 the backend actually supports (`Carry`/`Midlane`/`Offlane`
-  in `web/js/config.js`'s `ROLES`) — the mockup's own demo data additionally
-  listed Soft/Hard Support, which `hero_matchup_advantage` has no ranking
-  data for (supports are only used as opponent-side weighting in the draft
-  suggester, not ranked in a role list themselves), so those were dropped
-  rather than shown disabled. Top-3/bottom-3 rows are highlighted green/red
+  ranked list (`Show all N heroes` / `Show top 10 only`). Role options live in
+  `web/js/config.js`'s `ROLES` and are now **four**: Carry/Midlane/Offlane plus
+  Support, added 2026-10-06. `hero_matchup_advantage` gained a Supports list on
+  2026-09-08 (5,544 rows, 44 heroes, ranks 1..44 — the same shape as Offlane)
+  but `matchup.py`'s `VALID_ROLES` still rejected it, so the data sat
+  unreachable from this page for a month. **The UI label is "Support"
+  (singular) while the API name is "Supports"** — matching the draft page's
+  existing tab. `setupCombo` uses each option as both label *and* value, so
+  `ROLES` holds the label and `ROLE_API_NAME` maps it back at the single fetch
+  call, rather than teaching that shared widget (six combos across both pages)
+  about label/value pairs for one case. Note the mockup's own demo data listed
+  *Soft/Hard* Support as two entries; we have one combined Supports list, so
+  there is still only one option, not two. Top-3/bottom-3 rows are highlighted green/red
   only when the row's own advantage sign agrees with its tier position
   (matches the mockup's `idx<3 && adv>0` / `idx>=total-3 && adv<0` logic
   exactly — an edge case, like a top-3 "best" pick that's still net-negative,
   intentionally stays unhighlighted rather than being forced green).
+- **Hero matchup profile** (`web/js/hero-matchups.js`) — second section on
+  `matchup.html`, added 2026-10-06. Pick one hero; see its own win rate in a
+  context strip plus its Advantages and Disadvantages against all 126 opponents
+  as two lists, with the same mobile segmented toggle the draft page uses.
+  Backed by `GET /hero-matchups/{hero_id}`.
+  - **Separate file, every top-level name prefixed** (`hmState`, `HM_*`).
+    `matchup.js` and this share one global scope and it already owns `state`,
+    `PAGE_SIZE` and `MATCHUP_SCALE_MAX` — redeclaring a `const` would break the
+    whole page. It also reuses `matchup.js`'s single `/heroes` fetch via
+    `hmInit(state.heroes)` rather than making its own.
+  - Row WR is `wr_a_b` (the rate against *that* opponent), not `hero_wr` as the
+    ranked list above uses — here `hero_wr` is constant down the whole list, so
+    it sits in the context strip instead of being repeated in every row.
+  - ⚠️ **The shared `.row` grid is too wide for this page.** It lets the bar
+    track grow to 140px, which is fine on `index.html` (880px) but `matchup.html`
+    is `.page.narrow` (760px), so each of the two columns is ~50px tighter and
+    the name column collapsed to **70px** — truncating 8 of 10 rows,
+    "Anti-Mage" included, while the draft page truncated none. Fixed with a
+    `#hmListsGrid .row` override capping the bar at 86px, which returns the name
+    to ~124px. Scoped to that grid so the ranked list above and the draft page
+    are untouched. Any future two-column list on a `.narrow` page needs the same
+    treatment.
 - **Stale-response guard**: `draft.js` tracks `requestSeq` +
   `state.suggestionsForPicks`. Adding/removing picks in quick succession
   fires overlapping `POST /draft-suggestions` calls (each takes ~3s — see
@@ -704,11 +746,15 @@ import ...` resolves from any CWD.
 ## Next up
 
 - **Tests now exist, but only for the two pure modules.** `tests/` + pytest
-  (`pip install -e ".[dev]"`, then `pytest`) landed with Phase B — **44 tests**,
-  no DB needed: 29 for `engine/draft_context.py`'s `build_context` and 15 for
-  `ingestion/load_patch_notes.py`'s `render_notes`. Everything else
-  (the matchup/draft engine, all API routers) is still spot-checked manually
-  only. `draft_context.py` is deliberately split so scoring is pure and
+  (`pip install -e ".[dev]"`, then `pytest`) landed with Phase B and now stands
+  at **77 tests**, no DB needed: 29 for `engine/draft_context.py`'s
+  `build_context`, 19 for `engine/coach.py`, 15 for
+  `ingestion/load_patch_notes.py`'s `render_notes` and 14 for `credentials.py`.
+  Everything else (the matchup/draft engine, all API routers, every loader) is
+  still spot-checked manually only — the ingestion and API work added on
+  2026-10-06 (`load_stratz_hero_lane.py`, `GET /hero-matchups/{hero_id}`)
+  followed that existing convention and added no tests, verifying against the
+  production DB and a headless-Chromium run instead. `draft_context.py` is deliberately split so scoring is pure and
   `load_bucket_stats` holds the only DB access — worth copying if the older
   engine code ever gets tests.
 - `database_local.py` (a pre-reorg leftover with a real DB password and a
