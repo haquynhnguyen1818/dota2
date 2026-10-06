@@ -655,3 +655,13 @@ footer{
 @media (min-width:600px){
   .plan-grid{grid-template-columns:1fr 1fr;}
 }
+
+/* ---------- Hero matchup profile ---------- */
+/* These two columns sit inside .page.narrow (760px), ~50px tighter per column
+   than the draft page's 880px. The shared .row grid lets the bar track grow to
+   140px, which left only 70px for the name and truncated most heroes ("Anti-Mage"
+   included). Capping the bar here returns the name to ~125px, matching the draft
+   page; the value column beside it still carries the exact number. */
+@media (min-width:760px){
+  #hmListsGrid .row{grid-template-columns:26px 1fr minmax(60px,86px) 72px;}
+}
