@@ -7,7 +7,7 @@ from app.api.schemas.matchup import MatchupAdvantageOut
 
 router = APIRouter(prefix="/matchup-advantage", tags=["matchup-advantage"])
 
-VALID_ROLES = {"Carry", "Midlane", "Offlane"}
+VALID_ROLES = {"Carry", "Midlane", "Offlane", "Supports"}
 
 
 @router.get("/{role}/{vs_hero_id}", response_model=list[MatchupAdvantageOut])

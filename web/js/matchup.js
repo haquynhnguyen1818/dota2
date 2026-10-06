@@ -110,7 +110,7 @@ async function loadRanking() {
   const heroId = state.heroes.find((h) => h.name === state.hero)?.id;
   if (!heroId) return;
   try {
-    state.rows = await getMatchupAdvantage(state.role, heroId);
+    state.rows = await getMatchupAdvantage(ROLE_API_NAME[state.role] ?? state.role, heroId);
   } catch (e) {
     state.error = e;
   }

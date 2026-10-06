@@ -6,5 +6,12 @@ const API_BASE_URL =
     : "https://165-22-246-179.sslip.io";
 
 const SCALE_MAX = 11; // advantage % that maps to a full half-bar
-const ROLES = ["Carry", "Midlane", "Offlane"];
+const ROLES = ["Carry", "Midlane", "Offlane", "Support"];
+
+// The role sheet names the list "Supports"; the UI says "Support", matching the
+// draft page's tab. setupCombo uses each option as both label and value, so the
+// label is what ROLES holds and this maps it back at the one call site that
+// talks to the API. Only names that differ need an entry.
+const ROLE_API_NAME = { Support: "Supports" };
+
 const MAX_PICKS = 5;
