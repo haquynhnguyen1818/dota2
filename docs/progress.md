@@ -239,6 +239,43 @@ is confirmed working in production.
   (2954) while every other table uses Stratz's Unix timestamp (1786579200 =
   604800 × 2954, the same week) — the loader stores the requested timestamp so
   this table joins cleanly with the rest.
+- `load_stratz_hero_lane.py` — **The only laning-phase win/loss data in the
+  schema.** Stratz `heroStats.laneOutcome` → `stratz_hero_lane_outcome`
+  (`hero_id`, `other_hero_id`, `is_with`, `games_played`, `lane_wins`,
+  `lane_draws`, `lane_losses`, `match_wins`; PK on the first three). 32,004 rows
+  = 127 × 126 × 2 directions, dense. `is_with = false` is lane *opponents* (what
+  should replace the whole-game stand-in behind `predicted_lane.matchup_delta`);
+  `is_with = true` is the lane *partner*, i.e. the lane-synergy split deferred
+  in `proj_obj.txt` Phase 2 step 2 note (b). Summed over the latest 2 weeks with
+  no `week` column, like `stratz_hero_matchups`/`stratz_hero_synergy`.
+  `heroId` is singular *and* optional — omitting it returns all heroes in one
+  ~1MB+ response Stratz truncates, and it is not a list, so batching is
+  unavailable: 1 call per hero per week per direction, 508 total at 0.3s.
+  - ⚠️ **`matchCount` is NOT the lane denominator.** ~13.4% of matches carry no
+    lane classification, so `matchCount` > `winCount + drawCount + lossCount`.
+    A lane win rate is `lane_wins / (lane_wins + lane_draws + lane_losses)`;
+    dividing by `games_played` understates it by about an eighth.
+    `games_played` is the right denominator only for `match_wins`.
+  - ⚠️ **Lanes draw ~29% of the time**, so a *balanced* pooled lane win rate is
+    **35.4%, not 50%** — measured pooled win 35.40% / draw 29.20% / loss 35.40%,
+    summing to 100.00%. Don't "fix" 35% toward 50%. Symmetry was verified
+    properly instead: A-vs-B `lane_wins` equals B-vs-A `lane_losses` to the unit.
+  - ⚠️ **Do not select `position` on this endpoint.** With `positionIds`
+    unfiltered it echoes a constant `POSITION_1` on *every* row regardless of
+    hero — all 32,004, Crystal Maiden's pos-5 rows included. It shipped in the
+    first load, mislabelled everything while looking authoritative, and was
+    dropped. The table is a blanket all-positions outcome per pair; real
+    per-position data needs `positionIds` and one call per hero per position.
+  - **Schema was verified from the generated models at
+    `github.com/TheAmazingLooser/STRATZ_Models`**, not introspected, since the
+    token is IP-bound to the Droplet. That caught three would-be bugs before the
+    first run: `laneOutcome` takes **no `take` argument** (its list is `isWith`
+    required, then `heroId`/`week`/`bracketBasicIds`/`positionIds`), `drawCount`
+    exists, and `winCount` vs `matchWinCount` are won-the-lane vs won-the-game.
+    Useful trick when the token can't be used: that repo mirrors the whole schema.
+  - Sanity-checked: Dark Seer vs Shadow Fiend wins the lane 12.2% but the match
+    54.1%; Anti-Mage vs Viper 26.2% lane / 50.1% match. That ~40pp gap between
+    lane and game is precisely the signal `stratz_hero_matchups` cannot express.
 - `load_stratz_item_timings.py` — Post-draft coach, Phase E2. Stratz
   `constants.items` → `stratz_items` (id/short_name/display_name), and
   `heroStats.itemFullPurchase` → `stratz_hero_item_purchase` (`hero_id`,
@@ -612,9 +649,12 @@ import ...` resolves from any CWD.
   `lossCount` for the laning phase, no precomputed TrueSynergy-style offset,
   so using it would mean a new ingestion table (`stratz_hero_lane_synergy`
   or similar) plus writing our own log5 expected-WR math for it — step-1
-  (ingestion) scope, not step-2 (scoring). Deliberately not pulled in this
-  pass since the user scoped the Phase 2 step 2 work to "Engine + API only."
-  The blanket `stratz_hero_synergy.synergy` field is used as-is for now.
+  (ingestion) scope, not step-2 (scoring).
+  **No longer deferred — ingested 2026-10-06** as `stratz_hero_lane_outcome`
+  (see `load_stratz_hero_lane.py` above), both directions. The scoring half is
+  still open: nothing reads the table yet, so `draft-suggestions` still uses the
+  blanket `stratz_hero_synergy.synergy` and `predicted_lane.matchup_delta` is
+  still computed from whole-game `stratz_hero_matchups`.
 - **Stratz's `player.heroesPerformance` is capped at ~10 total matches under
   the default API token, regardless of the player's actual match count.**
   Confirmed against two very different accounts — the user's own public
