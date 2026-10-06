@@ -74,12 +74,65 @@
     </div>
   </div>
 
-  <footer>Advantage = expected win-rate delta for this hero in this role, given the selected opponent.</footer>
+
+  <!-- Single-hero matchup profile -->
+  <div class="card">
+    <p class="eyebrow">Hero matchup profile</p>
+    <div>
+      <p class="combo-label">Hero</p>
+      <div class="combo" id="hmHeroCombo">
+        <div class="combo-trigger" id="hmHeroTrigger" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+          <span class="combo-value placeholder" id="hmHeroValue">Select hero…</span>
+          <span class="combo-icons">
+            <button class="combo-clear" id="hmHeroClear" aria-label="Clear hero" type="button">×</button>
+            <span class="combo-chevron"></span>
+          </span>
+        </div>
+        <div class="combo-panel" id="hmHeroPanel" role="listbox">
+          <input class="combo-search" id="hmHeroSearch" type="text" placeholder="Search hero…">
+          <div class="combo-list" id="hmHeroList"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="context-strip" id="hmContextStrip"></div>
+  </div>
+
+  <div class="segmented" id="hmSegmented">
+    <button class="seg-btn active pos" data-view="best" type="button">Advantages</button>
+    <button class="seg-btn" data-view="worst" type="button">Disadvantages</button>
+  </div>
+
+  <div class="lists-grid show-best" id="hmListsGrid">
+    <div class="list-col best">
+      <div class="list-head">
+        <span class="dot pos"></span>
+        <h3>Advantages</h3>
+        <span id="hmBestCount"></span>
+      </div>
+      <div id="hmBestList"></div>
+      <div class="show-more-wrap" id="hmShowMoreWrap" style="display:none;">
+        <button class="btn-showmore" id="hmShowMoreBtn"></button>
+      </div>
+    </div>
+    <div class="list-col worst">
+      <div class="list-head">
+        <span class="dot neg"></span>
+        <h3>Disadvantages</h3>
+        <span id="hmWorstCount"></span>
+      </div>
+      <div id="hmWorstList"></div>
+    </div>
+  </div>
+
+  <footer>Advantage = expected win-rate delta. The ranked list is for one role against the
+  selected opponent; the hero profile is one hero against every opponent, role-independent.</footer>
 </div>
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script src="js/combo.js"></script>
+<script src="js/hero-matchups.js"></script>
 <script src="js/matchup.js"></script>
 </body>
 </html>

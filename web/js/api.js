@@ -26,6 +26,10 @@ function getMatchupAdvantage(role, vsHeroId) {
   return apiGet(`/matchup-advantage/${encodeURIComponent(role)}/${vsHeroId}`);
 }
 
+function getHeroMatchups(heroId) {
+  return apiGet(`/hero-matchups/${heroId}`);
+}
+
 function getDraftSuggestions(opponentPicks, allyPicks, playerAccountId) {
   return apiPost("/draft-suggestions", {
     opponent_picks: opponentPicks,

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.db import pool
-from app.api.routers import analysis, coach, draft, heroes, matchup, players
+from app.api.routers import analysis, coach, draft, hero_matchups, heroes, matchup, players
 from app.engine.coach import ensure_coach_plans_table, ensure_rate_limit_table
 
 
@@ -32,6 +32,7 @@ app.add_middleware(
 
 app.include_router(heroes.router)
 app.include_router(matchup.router)
+app.include_router(hero_matchups.router)
 app.include_router(draft.router)
 app.include_router(players.router)
 app.include_router(analysis.router)

@@ -121,6 +121,9 @@ async function init() {
   state.heroes = await getHeroes();
   const heroNames = state.heroes.map((h) => h.name).sort((a, b) => a.localeCompare(b));
 
+  // The hero-profile section below reuses this one /heroes fetch.
+  hmInit(state.heroes);
+
   setupCombo({
     comboId: "roleCombo",
     triggerId: "roleTrigger",
