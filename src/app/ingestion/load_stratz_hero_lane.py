@@ -45,12 +45,23 @@ docs/progress.md). It is not a list either, so batching like
 `load_stratz_matchups.py` is not available: one request per hero, as
 `load_stratz_item_timings.py` does.
 
-`positionIds` is not passed, so the endpoint reports every position it has and
-`position` comes back on each row. It is stored and part of the primary key,
-since the coach's lane logic is position-aware (pos 1+5 safelane, 2 mid, 3+4
-offlane). A null position is stored as 'ALL' -- Postgres forbids NULL in a
-primary key, and this way the loader survives the endpoint returning ungrouped
-rows instead of failing on insert.
+⚠️ **`position` is deliberately not stored, and must not be selected.** The type
+exposes it and the obvious reading is "which lane this row describes", but with
+`positionIds` left unfiltered the endpoint echoes a constant `POSITION_1` on
+*every* row regardless of hero -- measured on the real load: 32,004 of 32,004
+rows, Crystal Maiden's pos-5 rows included. Storing it produced a column that
+mislabelled every row while looking authoritative. What this table holds is a
+blanket, all-positions lane outcome per pair. Real per-position data means
+passing `positionIds` and accepting one request per hero *per position*, which
+no consumer asks for yet.
+
+⚠️ **`matchCount` is not the lane denominator.** About 13.4% of matches carry no
+lane classification, so `matchCount` exceeds `winCount + drawCount + lossCount`
+(measured across the whole table). A lane win rate is
+`lane_wins / (lane_wins + lane_draws + lane_losses)`; dividing by `games_played`
+instead understates every hero by roughly an eighth. `games_played` is kept
+because it is the right denominator for `match_wins`, which is the whole-game
+question. The two denominators are different on purpose -- do not mix them.
 """
 import time
 from collections import defaultdict
@@ -76,7 +87,6 @@ query ($heroId: Short!, $week: Long, $isWith: Boolean!) {
   heroStats {
     laneOutcome(heroId: $heroId, week: $week, isWith: $isWith) {
       heroId2
-      position
       matchCount
       winCount
       drawCount
@@ -92,24 +102,23 @@ CREATE TABLE IF NOT EXISTS stratz_hero_lane_outcome (
     hero_id INTEGER REFERENCES heroes(id),
     other_hero_id INTEGER REFERENCES heroes(id),
     is_with BOOLEAN,
-    position TEXT,
     games_played BIGINT,
     lane_wins BIGINT,
     lane_draws BIGINT,
     lane_losses BIGINT,
     match_wins BIGINT,
-    PRIMARY KEY (hero_id, other_hero_id, is_with, position)
+    PRIMARY KEY (hero_id, other_hero_id, is_with)
 )
 """
 
 UPSERT_LANE = """
 INSERT INTO stratz_hero_lane_outcome
-    (hero_id, other_hero_id, is_with, position,
+    (hero_id, other_hero_id, is_with,
      games_played, lane_wins, lane_draws, lane_losses, match_wins)
 VALUES
-    (%(hero_id)s, %(other_hero_id)s, %(is_with)s, %(position)s,
+    (%(hero_id)s, %(other_hero_id)s, %(is_with)s,
      %(games_played)s, %(lane_wins)s, %(lane_draws)s, %(lane_losses)s, %(match_wins)s)
-ON CONFLICT (hero_id, other_hero_id, is_with, position) DO UPDATE SET
+ON CONFLICT (hero_id, other_hero_id, is_with) DO UPDATE SET
     games_played = EXCLUDED.games_played,
     lane_wins = EXCLUDED.lane_wins,
     lane_draws = EXCLUDED.lane_draws,
@@ -139,8 +148,8 @@ def _fetch(hero_id: int, week: int, is_with: bool) -> list[dict[str, Any]]:
 
 
 def fetch_lane_outcomes(hero_ids: list[int], weeks: list[int]) -> list[dict[str, Any]]:
-    """Every hero x week x direction, summed across weeks into one row per pair+position."""
-    totals: dict[tuple[int, int, bool, str], dict[str, int]] = defaultdict(
+    """Every hero x week x direction, summed across weeks into one row per pair."""
+    totals: dict[tuple[int, int, bool], dict[str, int]] = defaultdict(
         lambda: dict.fromkeys(_COUNTS, 0)
     )
 
@@ -149,7 +158,7 @@ def fetch_lane_outcomes(hero_ids: list[int], weeks: list[int]) -> list[dict[str,
             for hero_id in hero_ids:
                 for row in _fetch(hero_id, week, is_with):
                     # Nulls are possible on every count; a missing count is 0, not a crash.
-                    key = (hero_id, row["heroId2"], is_with, row["position"] or "ALL")
+                    key = (hero_id, row["heroId2"], is_with)
                     bucket = totals[key]
                     bucket["games_played"] += row["matchCount"] or 0
                     bucket["lane_wins"] += row["winCount"] or 0
@@ -163,10 +172,9 @@ def fetch_lane_outcomes(hero_ids: list[int], weeks: list[int]) -> list[dict[str,
             "hero_id": hero_id,
             "other_hero_id": other_hero_id,
             "is_with": is_with,
-            "position": position,
             **counts,
         }
-        for (hero_id, other_hero_id, is_with, position), counts in totals.items()
+        for (hero_id, other_hero_id, is_with), counts in totals.items()
     ]
 
 
